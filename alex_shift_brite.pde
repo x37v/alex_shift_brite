@@ -3,8 +3,13 @@
 #define enablepin 10 // EI
 #define latchpin 9 // LI
 
+#include "hslrgb.h"
+
 #define NumLEDs 24
-int LEDChannels[NumLEDs][3] = {0};
+
+float hsl[3];
+
+int LEDChannels[NumLEDs][3];
 int SB_CommandMode;
 int SB_RedCommand;
 int SB_GreenCommand;
@@ -40,9 +45,9 @@ void WriteLEDArray() {
 
     SB_CommandMode = B00; // Write to PWM control registers
     for (int h = 0;h<NumLEDs;h++) {
-	  SB_RedCommand = LEDChannels[h][0];
-	  SB_GreenCommand = LEDChannels[h][1];
-	  SB_BlueCommand = LEDChannels[h][2];
+	  SB_RedCommand = LEDChannels[h][0] & 0x3ff;
+	  SB_GreenCommand = LEDChannels[h][1] & 0x3ff;
+	  SB_BlueCommand = LEDChannels[h][2] & 0x3ff;
 	  SB_SendPacket();
     }
 
@@ -73,9 +78,25 @@ void setup() {
 	clear();
 	delay(10);
 	WriteLEDArray();
+	hsl[0] = 0.01;
+	hsl[1] = 0.5;
+	hsl[2] = 0.1;
 }
 
 void loop() {
+	uint16_t rgb[3];
+	hsl2rgb(hsl, rgb);
+	for(uint8_t i = 0; i < NumLEDs; i++){
+		for(uint8_t j = 0; j < 3; j++)
+			LEDChannels[i][j] = rgb[j];
+	}
+	WriteLEDArray();
+	delay(50);
+	hsl[0] = (hsl[0] + 0.01);
+	if(hsl[0] > 1.0f)
+		hsl[0] = 0.0f;
+
+#if 0
 	int tmp[3];
 
 	for(uint8_t i = 0; i < 3; i++)
@@ -87,6 +108,14 @@ void loop() {
 	}
 
 	if(random(16) > 14){
+		uint16_t hsl[3];
+		uint16_t rgb[3];
+		hsl[0] = random(1024);
+		hsl[1] = random(50);
+		hsl[2] = random(50);
+		hsl2rgb(hsl,rgb);
+
+		/*
 		uint8_t i = random(4);
 		LEDChannels[0][0] = 
 			LEDChannels[0][1] = 
@@ -98,14 +127,18 @@ void loop() {
 			LEDChannels[0][1] = random(256);
 			LEDChannels[0][2] = random(256);
 		}
+		*/
+		for(uint8_t i = 0; i < 3; i++)
+			LEDChannels[0][i] = rgb[i];
 	} else {
-		//for(uint8_t i = 0; i < 3; i++)
-			//LEDChannels[0][i] = tmp[i];
+		for(uint8_t i = 0; i < 3; i++)
+			LEDChannels[0][i] = tmp[i];
 	}
 
-	//if(random(256) > 251)
-		//clear();
-//
+	if(random(256) > 251)
+		clear();
+
    WriteLEDArray();
 	delay(40);
+#endif
 }
