@@ -12,7 +12,7 @@ float hue2rgb(float vH, float v1, float v2){
   else return ( v1 );
 }
 
-#define SCALE 256
+#define SCALE 1024.0f
 
 void hsl2rgb(float hsl[3], uint16_t (&rgb)[3]){
 	
@@ -27,9 +27,9 @@ void hsl2rgb(float hsl[3], uint16_t (&rgb)[3]){
 
 
 	if ( saturation <= 0.01 ){ // HSL from 0 to 1
-		rgb[0] = (uint16_t)(level * (float)SCALE); // RGB results from 0 to 1023
-		rgb[1] = (uint16_t)(level * (float)SCALE);
-		rgb[2] = (uint16_t)(level * (float)SCALE);
+		rgb[0] = (uint16_t)(level * SCALE); // RGB results from 0 to SCALE
+		rgb[1] = (uint16_t)(level * SCALE);
+		rgb[2] = (uint16_t)(level * SCALE);
 	}
 	else {
 		float vred=0.0f;
@@ -41,9 +41,9 @@ void hsl2rgb(float hsl[3], uint16_t (&rgb)[3]){
 		v1 = 2. * level - v2;
 		vred = hue + ( 1./3. );
 		vblue = hue - ( 1./3. );
-		rgb[0] = (float)SCALE * hue2rgb( vred, v1, v2);
-		rgb[1] = (float)SCALE * hue2rgb( hue, v1, v2);
-		rgb[2] = (float)SCALE * hue2rgb( vblue, v1, v2 ); 
+		rgb[0] = SCALE * hue2rgb( vred, v1, v2);
+		rgb[1] = SCALE * hue2rgb( hue, v1, v2);
+		rgb[2] = SCALE * hue2rgb( vblue, v1, v2 ); 
 	}
 
 	for(uint8_t i = 0; i < 3; i++)

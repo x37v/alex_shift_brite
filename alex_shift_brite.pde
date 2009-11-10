@@ -3,6 +3,9 @@
 #define enablepin 10 // EI
 #define latchpin 9 // LI
 
+#define TRIGGER_PIN 3
+#define TRIGGER_GND 4
+
 #include "hslrgb.h"
 
 #define NumLEDs 24
@@ -65,6 +68,11 @@ void WriteLEDArray() {
 
 }
 
+void update(){
+	hsl[0] = (float)random(256) / 256.0f;
+	hsl[1] = (float)random(256) / 256.0f;
+}
+
 void setup() {
 
    pinMode(datapin, OUTPUT);
@@ -75,26 +83,41 @@ void setup() {
    digitalWrite(latchpin, LOW);
    digitalWrite(enablepin, LOW);
 
+	//set the trigger ground to be an output, set it to zero
+	pinMode(TRIGGER_GND, OUTPUT);
+	digitalWrite(TRIGGER_GND, LOW);
+	//set the trigger pin to be an input, with pullup
+	pinMode(TRIGGER_PIN, INPUT);
+	DDRD &= ~(1 << TRIGGER_PIN);
+	PORTD |= (1 << TRIGGER_PIN);
+
 	clear();
 	delay(10);
 	WriteLEDArray();
-	hsl[0] = 0.01;
+	hsl[0] = 0.9;
 	hsl[1] = 0.5;
 	hsl[2] = 0.1;
+
+	//interrupt on button down
+	attachInterrupt(1, update, FALLING);
 }
 
 void loop() {
 	uint16_t rgb[3];
+
 	hsl2rgb(hsl, rgb);
 	for(uint8_t i = 0; i < NumLEDs; i++){
 		for(uint8_t j = 0; j < 3; j++)
 			LEDChannels[i][j] = rgb[j];
 	}
 	WriteLEDArray();
-	delay(50);
+	delay(5);
+	
+	/*
 	hsl[0] = (hsl[0] + 0.01);
 	if(hsl[0] > 1.0f)
 		hsl[0] = 0.0f;
+	*/
 
 #if 0
 	int tmp[3];
