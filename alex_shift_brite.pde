@@ -13,6 +13,11 @@
 
 float hsv[3];
 float level;
+#define HIST_LEN 4
+
+uint8_t but_hist;
+uint8_t hist;
+bool down;
 
 int LEDChannels[NumLEDs][3];
 int SB_CommandMode;
@@ -75,20 +80,22 @@ void WriteLEDArray() {
 
 void update(){
 	unsigned long time = millis();
-	/*
+
 	if(time_last + 5 < time){
 		hsv[0] = (float)random(256) / 256.0f;
-		hsv[1] = (float)random(256) / 256.0f;
 
 		if(time_last != 0){
 			interval = time - time_last;
 		}
 		time_last = time;
 	}
-	*/
 }
 
 void setup() {
+
+	hist = 0;
+	but_hist = 0;
+	down = false;
 
    pinMode(datapin, OUTPUT);
    pinMode(latchpin, OUTPUT);
@@ -101,6 +108,7 @@ void setup() {
 	//set the trigger ground to be an output, set it to zero
 	pinMode(TRIGGER_GND, OUTPUT);
 	digitalWrite(TRIGGER_GND, LOW);
+
 	//set the trigger pin to be an input, with pullup
 	pinMode(TRIGGER_PIN, INPUT);
 	DDRD &= ~(1 << TRIGGER_PIN);
@@ -114,11 +122,8 @@ void setup() {
 	hsv[1] = 1.0;
 	hsv[2] = 0.0;
 
-	interval = 50;
+	interval = 0;
 	time_last = 0;
-
-	//interrupt on button down
-	//attachInterrupt(1, update, FALLING);
 }
 
 void draw(unsigned long time){
@@ -127,18 +132,13 @@ void draw(unsigned long time){
 	level = (level + 0.005);
 	if(level > 1.0f){
 		level = 0.0f;
-		hsv[0] += 0.09;
-		if(hsv[0] >= 1.0f)
-			hsv[0] -= 1.0f;
 	}
 	hsv[2] = sin(level * 1.57 + 4.71) + 1.0f;
+	hsv2rgb(hsv, rgb);
 
 	/*
-	hsv[0] = (hsv[0] + 0.001);
-	if(hsv[0] > 1.0f)
-		hsv[0] = 0.0f;
-		*/
-	/*
+	hsv[2] = 1.0;
+
 	if(interval < 8 || (time % interval < (interval >> 1))){
 		rgb[0] = 
 			rgb[1] = 
@@ -147,8 +147,7 @@ void draw(unsigned long time){
 		hsv2rgb(hsv, rgb);
 	}
 	*/
-	//hsv2rgb(hsv, rgb);
-	hsv2rgb(hsv, rgb);
+
 	for(uint8_t i = 0; i < NumLEDs; i++){
 		for(uint8_t j = 0; j < 3; j++)
 			LEDChannels[i][j] = rgb[j];
@@ -158,6 +157,26 @@ void draw(unsigned long time){
 
 void loop() {
 	unsigned long time = millis();
+
+	//check for a trigger
+	if(digitalRead(TRIGGER_PIN))
+		but_hist |= (1 << hist);
+	else
+		but_hist &= ~(1 << hist);
+
+	hist = (hist + 1) % HIST_LEN;
+
+	//up
+	if(but_hist == 0x0F){
+		down = false;
+		//down
+	} else if(but_hist == 0x00){
+		if(!down){
+			update();
+			down = true;
+		}
+	}
+
 	if(time % 10 == 0){
 		draw(time);
 	}
