@@ -78,6 +78,7 @@ void WriteLEDArray() {
 
 }
 
+/*
 void update(){
 	unsigned long time = millis();
 
@@ -90,6 +91,7 @@ void update(){
 		time_last = time;
 	}
 }
+*/
 
 void setup() {
 
@@ -126,13 +128,24 @@ void setup() {
 	time_last = 0;
 }
 
-void draw(unsigned long time){
+void draw(unsigned long time, bool trig){
 	uint16_t rgb[3];
 
-	level = (level + 0.005);
-	if(level > 1.0f){
-		level = 0.0f;
+	//fade in on trig
+	if(trig){
+		hsv[0] = (float)random(256) / 256.0f;
+		level = 0.01;
+	} else if(level > 0.0f){
+		level = (level + 0.02);
+
+		if(hsv[0] >= 1.0f)
+			hsv[0] -= 1.0f;
+
+		if(level > 1.0f){
+			level = 0.0f;
+		}
 	}
+
 	hsv[2] = sin(level * 1.57 + 4.71) + 1.0f;
 	hsv2rgb(hsv, rgb);
 
@@ -157,6 +170,7 @@ void draw(unsigned long time){
 
 void loop() {
 	unsigned long time = millis();
+	bool trig = false;
 
 	//check for a trigger
 	if(digitalRead(TRIGGER_PIN))
@@ -172,13 +186,13 @@ void loop() {
 		//down
 	} else if(but_hist == 0x00){
 		if(!down){
-			update();
+			trig = true;
 			down = true;
 		}
 	}
 
-	if(time % 10 == 0){
-		draw(time);
+	if(trig || (time % 10 == 0)){
+		draw(time, trig);
 	}
 	
 	/*
