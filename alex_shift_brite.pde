@@ -12,6 +12,7 @@
 #define NumLEDs 24
 
 float hsv[3];
+float level;
 
 int LEDChannels[NumLEDs][3];
 int SB_CommandMode;
@@ -74,6 +75,7 @@ void WriteLEDArray() {
 
 void update(){
 	unsigned long time = millis();
+	/*
 	if(time_last + 5 < time){
 		hsv[0] = (float)random(256) / 256.0f;
 		hsv[1] = (float)random(256) / 256.0f;
@@ -83,6 +85,7 @@ void update(){
 		}
 		time_last = time;
 	}
+	*/
 }
 
 void setup() {
@@ -106,6 +109,7 @@ void setup() {
 	clear();
 	delay(10);
 	WriteLEDArray();
+	level = 0.0;
 	hsv[0] = 0.0;
 	hsv[1] = 1.0;
 	hsv[2] = 0.0;
@@ -114,19 +118,20 @@ void setup() {
 	time_last = 0;
 
 	//interrupt on button down
-	attachInterrupt(1, update, FALLING);
+	//attachInterrupt(1, update, FALLING);
 }
 
 void draw(unsigned long time){
 	uint16_t rgb[3];
 
-	hsv[2] = (hsv[2] + 0.01);
-	if(hsv[2] > 1.0f){
-		hsv[2] = 0.0f;
+	level = (level + 0.005);
+	if(level > 1.0f){
+		level = 0.0f;
 		hsv[0] += 0.09;
 		if(hsv[0] >= 1.0f)
 			hsv[0] -= 1.0f;
 	}
+	hsv[2] = sin(level * 1.57 + 4.71) + 1.0f;
 
 	/*
 	hsv[0] = (hsv[0] + 0.001);
