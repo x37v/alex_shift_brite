@@ -12,7 +12,7 @@ float hue2rgb(float vH, float v1, float v2){
   else return ( v1 );
 }
 
-#define SCALE 1024.0f
+#define SCALE 512.0f
 
 void hsl2rgb(float hsl[3], uint16_t (&rgb)[3]){
 	

@@ -6,17 +6,21 @@
 #define TRIGGER_PIN 3
 #define TRIGGER_GND 4
 
-#include "hslrgb.h"
+#include "hsvrgb.h"
+#include "math.h"
 
 #define NumLEDs 24
 
-float hsl[3];
+float hsv[3];
 
 int LEDChannels[NumLEDs][3];
 int SB_CommandMode;
 int SB_RedCommand;
 int SB_GreenCommand;
 int SB_BlueCommand;
+
+volatile unsigned long interval;
+volatile unsigned long time_last;
 
 void clear() {
 	for(uint8_t i = 0; i < NumLEDs; i++){
@@ -69,8 +73,16 @@ void WriteLEDArray() {
 }
 
 void update(){
-	hsl[0] = (float)random(256) / 256.0f;
-	hsl[1] = (float)random(256) / 256.0f;
+	unsigned long time = millis();
+	if(time_last + 5 < time){
+		hsv[0] = (float)random(256) / 256.0f;
+		hsv[1] = (float)random(256) / 256.0f;
+
+		if(time_last != 0){
+			interval = time - time_last;
+		}
+		time_last = time;
+	}
 }
 
 void setup() {
@@ -94,30 +106,62 @@ void setup() {
 	clear();
 	delay(10);
 	WriteLEDArray();
-	hsl[0] = 0.9;
-	hsl[1] = 0.5;
-	hsl[2] = 0.1;
+	hsv[0] = 0.0;
+	hsv[1] = 1.0;
+	hsv[2] = 0.0;
+
+	interval = 50;
+	time_last = 0;
 
 	//interrupt on button down
 	attachInterrupt(1, update, FALLING);
 }
 
-void loop() {
+void draw(unsigned long time){
 	uint16_t rgb[3];
 
-	hsl2rgb(hsl, rgb);
+	hsv[2] = (hsv[2] + 0.01);
+	if(hsv[2] > 1.0f){
+		hsv[2] = 0.0f;
+		hsv[0] += 0.09;
+		if(hsv[0] >= 1.0f)
+			hsv[0] -= 1.0f;
+	}
+
+	/*
+	hsv[0] = (hsv[0] + 0.001);
+	if(hsv[0] > 1.0f)
+		hsv[0] = 0.0f;
+		*/
+	/*
+	if(interval < 8 || (time % interval < (interval >> 1))){
+		rgb[0] = 
+			rgb[1] = 
+			rgb[2] = 0;
+	} else {
+		hsv2rgb(hsv, rgb);
+	}
+	*/
+	//hsv2rgb(hsv, rgb);
+	hsv2rgb(hsv, rgb);
 	for(uint8_t i = 0; i < NumLEDs; i++){
 		for(uint8_t j = 0; j < 3; j++)
 			LEDChannels[i][j] = rgb[j];
 	}
 	WriteLEDArray();
-	delay(5);
+}
+
+void loop() {
+	unsigned long time = millis();
+	if(time % 10 == 0){
+		draw(time);
+	}
 	
 	/*
-	hsl[0] = (hsl[0] + 0.01);
-	if(hsl[0] > 1.0f)
-		hsl[0] = 0.0f;
-	*/
+	hsv[0] = (hsv[0] + 0.01);
+	if(hsv[0] > 1.0f)
+		hsv[0] = 0.0f;
+		*/
 
 #if 0
 	int tmp[3];
@@ -131,12 +175,12 @@ void loop() {
 	}
 
 	if(random(16) > 14){
-		uint16_t hsl[3];
+		uint16_t hsv[3];
 		uint16_t rgb[3];
-		hsl[0] = random(1024);
-		hsl[1] = random(50);
-		hsl[2] = random(50);
-		hsl2rgb(hsl,rgb);
+		hsv[0] = random(1024);
+		hsv[1] = random(50);
+		hsv[2] = random(50);
+		hsv2rgb(hsv,rgb);
 
 		/*
 		uint8_t i = random(4);
