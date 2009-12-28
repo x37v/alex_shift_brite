@@ -15,6 +15,22 @@ float hsv[3];
 float level;
 #define HIST_LEN 4
 
+typedef struct _echo_pattern_data_t {
+	long next_update;
+	long last_update;
+	bool on;
+	long interval;
+	float level;
+	float level_mod;
+	float hue;
+} echo_pattern_data_t;
+
+#define ECHO_PAT_LEN 4
+//ms
+#define ECHO_PAT_ON_LEN 30
+volatile echo_pattern_data_t echo_pattern_data[ECHO_PAT_LEN];
+volatile uint8_t echo_pattern_index;
+
 uint8_t but_hist;
 uint8_t hist;
 bool down;
@@ -25,7 +41,7 @@ int SB_RedCommand;
 int SB_GreenCommand;
 int SB_BlueCommand;
 
-volatile unsigned long interval;
+//volatile unsigned long global_interval;
 volatile unsigned long time_last;
 
 void clear() {
@@ -86,7 +102,7 @@ void update(){
 		hsv[0] = (float)random(256) / 256.0f;
 
 		if(time_last != 0){
-			interval = time - time_last;
+			global_interval = time - time_last;
 		}
 		time_last = time;
 	}
@@ -94,6 +110,12 @@ void update(){
 */
 
 void setup() {
+
+	//a zero level means do not draw
+	for(uint8_t i = 0; i < ECHO_PAT_LEN; i++){
+		echo_pattern_data[i].level = 0.0f;
+	}
+	echo_pattern_index = 0;
 
 	hist = 0;
 	but_hist = 0;
@@ -124,17 +146,21 @@ void setup() {
 	hsv[1] = 1.0;
 	hsv[2] = 0.0;
 
-	interval = 0;
+	//global_interval = 0;
 	time_last = 0;
 }
 
 void draw(unsigned long time, bool trig){
 	uint16_t rgb[3];
 
+#if 0
 	//fade in on trig
 	if(trig){
 		hsv[0] = (float)random(256) / 256.0f;
 		level = 0.01;
+
+		//increment the echo pattern info
+		echo_pattern_index = (echo_pattern_index + 1) % ECHO_PAT_LEN;
 	} else if(level > 0.0f){
 		level = (level + 0.02);
 
@@ -148,18 +174,66 @@ void draw(unsigned long time, bool trig){
 
 	hsv[2] = sin(level * 1.57 + 4.71) + 1.0f;
 	hsv2rgb(hsv, rgb);
+#endif
 
-	/*
-	hsv[2] = 1.0;
 
-	if(interval < 8 || (time % interval < (interval >> 1))){
-		rgb[0] = 
-			rgb[1] = 
-			rgb[2] = 0;
-	} else {
-		hsv2rgb(hsv, rgb);
+	if(trig){
+		if(time_last != 0){
+			long interval = (time - time_last) / 2;
+			if(interval > (ECHO_PAT_ON_LEN + 20) && interval < 500){
+				hsv[0] = (float)random(256) / 256.0f;
+				echo_pattern_data[echo_pattern_index].interval = interval;
+				echo_pattern_data[echo_pattern_index].next_update = time + ECHO_PAT_ON_LEN;
+				echo_pattern_data[echo_pattern_index].last_update = time;
+				echo_pattern_data[echo_pattern_index].level = 1.0;
+				echo_pattern_data[echo_pattern_index].level_mod = -0.3;
+				echo_pattern_data[echo_pattern_index].on = true;
+				echo_pattern_data[echo_pattern_index].hue  = (float)random(256) / 256.0f;
+				echo_pattern_index = (echo_pattern_index + 1) % ECHO_PAT_LEN;
+			}
+		}
+		time_last = time;
 	}
-	*/
+
+	hsv[0] = hsv[1] = hsv[2] = 0.0f;
+
+	for(uint8_t i = 0; i < ECHO_PAT_LEN; i++){
+		if(echo_pattern_data[i].level > 0.0f){
+			//should we update?
+			if(time >= echo_pattern_data[i].next_update){
+				//swap the on state
+				echo_pattern_data[i].on = !echo_pattern_data[i].on;
+
+				//if it is on
+				if(echo_pattern_data[i].on){
+					echo_pattern_data[i].level += 
+						echo_pattern_data[i].level_mod;
+
+					if(echo_pattern_data[i].level <= 0.0f){
+						echo_pattern_data[i].level = 0;
+						continue;
+					}
+					//next update
+					echo_pattern_data[i].next_update += ECHO_PAT_ON_LEN;
+
+					//off
+				} else {
+					//next update
+					echo_pattern_data[i].next_update += 
+						(echo_pattern_data[i].interval - ECHO_PAT_ON_LEN);
+				}
+				echo_pattern_data[i].last_update = time;
+			}
+
+			if(echo_pattern_data[i].on){
+				hsv[0] = echo_pattern_data[i].hue;
+				hsv[1] = 1.0;
+				//hsv[2] = sin((1.0f - echo_pattern_data[i].level) * 1.57 + 4.71) + 1.0f;
+				hsv[2] = echo_pattern_data[i].level;
+			}
+		}
+	}
+	hsv2rgb(hsv, rgb);
 
 	for(uint8_t i = 0; i < NumLEDs; i++){
 		for(uint8_t j = 0; j < 3; j++)
@@ -191,7 +265,7 @@ void loop() {
 		}
 	}
 
-	if(trig || (time % 10 == 0)){
+	if(trig || (time % 2 == 0)){
 		draw(time, trig);
 	}
 	
@@ -201,49 +275,4 @@ void loop() {
 		hsv[0] = 0.0f;
 		*/
 
-#if 0
-	int tmp[3];
-
-	for(uint8_t i = 0; i < 3; i++)
-		tmp[i] = LEDChannels[NumLEDs - 1][i];
-
-	for(uint8_t i = NumLEDs - 1; i > 0; i--){
-		for(uint8_t j = 0; j < 3; j++)
-			LEDChannels[i][j] = LEDChannels[i - 1][j];
-	}
-
-	if(random(16) > 14){
-		uint16_t hsv[3];
-		uint16_t rgb[3];
-		hsv[0] = random(1024);
-		hsv[1] = random(50);
-		hsv[2] = random(50);
-		hsv2rgb(hsv,rgb);
-
-		/*
-		uint8_t i = random(4);
-		LEDChannels[0][0] = 
-			LEDChannels[0][1] = 
-			LEDChannels[0][2] = 0;
-		if(i < 3)
-			LEDChannels[0][i] = random(512);
-		else {
-			LEDChannels[0][0] = random(512);
-			LEDChannels[0][1] = random(256);
-			LEDChannels[0][2] = random(256);
-		}
-		*/
-		for(uint8_t i = 0; i < 3; i++)
-			LEDChannels[0][i] = rgb[i];
-	} else {
-		for(uint8_t i = 0; i < 3; i++)
-			LEDChannels[0][i] = tmp[i];
-	}
-
-	if(random(256) > 251)
-		clear();
-
-   WriteLEDArray();
-	delay(40);
-#endif
 }
