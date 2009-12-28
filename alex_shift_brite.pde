@@ -27,7 +27,7 @@ typedef struct _echo_pattern_data_t {
 
 #define ECHO_PAT_LEN 4
 //ms
-#define ECHO_PAT_ON_LEN 30
+#define ECHO_PAT_ON_LEN 40
 volatile echo_pattern_data_t echo_pattern_data[ECHO_PAT_LEN];
 volatile uint8_t echo_pattern_index;
 
@@ -153,6 +153,8 @@ void setup() {
 void draw(unsigned long time, bool trig){
 	uint16_t rgb[3];
 
+	clear();
+
 #if 0
 	//fade in on trig
 	if(trig){
@@ -174,6 +176,11 @@ void draw(unsigned long time, bool trig){
 
 	hsv[2] = sin(level * 1.57 + 4.71) + 1.0f;
 	hsv2rgb(hsv, rgb);
+
+	for(uint8_t i = 0; i < NumLEDs; i++){
+		for(uint8_t j = 0; j < 3; j++)
+			LEDChannels[i][j] = rgb[j];
+	}
 #endif
 
 
@@ -186,7 +193,7 @@ void draw(unsigned long time, bool trig){
 				echo_pattern_data[echo_pattern_index].next_update = time + ECHO_PAT_ON_LEN;
 				echo_pattern_data[echo_pattern_index].last_update = time;
 				echo_pattern_data[echo_pattern_index].level = 1.0;
-				echo_pattern_data[echo_pattern_index].level_mod = -0.3;
+				echo_pattern_data[echo_pattern_index].level_mod = -0.15;
 				echo_pattern_data[echo_pattern_index].on = true;
 				echo_pattern_data[echo_pattern_index].hue  = (float)random(256) / 256.0f;
 				echo_pattern_index = (echo_pattern_index + 1) % ECHO_PAT_LEN;
@@ -230,15 +237,21 @@ void draw(unsigned long time, bool trig){
 				hsv[1] = 1.0;
 				//hsv[2] = sin((1.0f - echo_pattern_data[i].level) * 1.57 + 4.71) + 1.0f;
 				hsv[2] = echo_pattern_data[i].level;
+				hsv2rgb(hsv, rgb);
+				for(uint8_t j = (i * 6); j < (i * 6 + 6); j++){
+					for(uint8_t k = 0; k < 3; k++)
+						LEDChannels[j][k] = rgb[k];
+				}
 			}
 		}
 	}
-	hsv2rgb(hsv, rgb);
+	/*
 
 	for(uint8_t i = 0; i < NumLEDs; i++){
 		for(uint8_t j = 0; j < 3; j++)
 			LEDChannels[i][j] = rgb[j];
 	}
+	*/
 	WriteLEDArray();
 }
 
