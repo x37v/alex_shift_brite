@@ -11,13 +11,19 @@
 
 #define NumLEDs 24
 
+typedef enum {
+	FADE,
+	QUAD_ECHO
+} pattern_t;
+
+volatile pattern_t led_pattern;
+
 float hsv[3];
-float level;
+float fade_level;
 #define HIST_LEN 4
 
 typedef struct _echo_pattern_data_t {
 	long next_update;
-	long last_update;
 	bool on;
 	long interval;
 	float level;
@@ -94,6 +100,24 @@ void WriteLEDArray() {
 
 }
 
+void set_pattern(pattern_t new_pat){
+	led_pattern = new_pat;
+	switch(led_pattern){
+		case FADE:
+			fade_level = 0.0;
+			break;
+		case QUAD_ECHO:
+			//a zero level means do not draw
+			for(uint8_t i = 0; i < ECHO_PAT_LEN; i++){
+				echo_pattern_data[i].level = 0.0f;
+			}
+			echo_pattern_index = 0;
+			break;
+		default:
+			break;
+	}
+}
+
 /*
 void update(){
 	unsigned long time = millis();
@@ -111,11 +135,8 @@ void update(){
 
 void setup() {
 
-	//a zero level means do not draw
-	for(uint8_t i = 0; i < ECHO_PAT_LEN; i++){
-		echo_pattern_data[i].level = 0.0f;
-	}
-	echo_pattern_index = 0;
+	//init the pattern
+	set_pattern(FADE);
 
 	hist = 0;
 	but_hist = 0;
@@ -141,7 +162,6 @@ void setup() {
 	clear();
 	delay(10);
 	WriteLEDArray();
-	level = 0.0;
 	hsv[0] = 0.0;
 	hsv[1] = 1.0;
 	hsv[2] = 0.0;
@@ -150,108 +170,108 @@ void setup() {
 	time_last = 0;
 }
 
-void draw(unsigned long time, bool trig){
+void draw(pattern_t pattern, unsigned long time, bool trig){
 	uint16_t rgb[3];
 
-	clear();
-
-#if 0
-	//fade in on trig
-	if(trig){
-		hsv[0] = (float)random(256) / 256.0f;
-		level = 0.01;
-
-		//increment the echo pattern info
-		echo_pattern_index = (echo_pattern_index + 1) % ECHO_PAT_LEN;
-	} else if(level > 0.0f){
-		level = (level + 0.02);
-
-		if(hsv[0] >= 1.0f)
-			hsv[0] -= 1.0f;
-
-		if(level > 1.0f){
-			level = 0.0f;
-		}
-	}
-
-	hsv[2] = sin(level * 1.57 + 4.71) + 1.0f;
-	hsv2rgb(hsv, rgb);
-
-	for(uint8_t i = 0; i < NumLEDs; i++){
-		for(uint8_t j = 0; j < 3; j++)
-			LEDChannels[i][j] = rgb[j];
-	}
-#endif
-
-
-	if(trig){
-		if(time_last != 0){
-			long interval = (time - time_last) / 2;
-			if(interval > (ECHO_PAT_ON_LEN + 20) && interval < 500){
+	switch(pattern){
+		case FADE:
+			//fade in on trig
+			if(trig){
 				hsv[0] = (float)random(256) / 256.0f;
-				echo_pattern_data[echo_pattern_index].interval = interval;
-				echo_pattern_data[echo_pattern_index].next_update = time + ECHO_PAT_ON_LEN;
-				echo_pattern_data[echo_pattern_index].last_update = time;
-				echo_pattern_data[echo_pattern_index].level = 1.0;
-				echo_pattern_data[echo_pattern_index].level_mod = -0.15;
-				echo_pattern_data[echo_pattern_index].on = true;
-				echo_pattern_data[echo_pattern_index].hue  = (float)random(256) / 256.0f;
-				echo_pattern_index = (echo_pattern_index + 1) % ECHO_PAT_LEN;
+				fade_level = 0.01;
+
+			} else if(fade_level > 0.0f){
+				fade_level = (fade_level + 0.005);
+
+				if(hsv[0] >= 1.0f)
+					hsv[0] -= 1.0f;
+
+				if(fade_level > 1.0f){
+					fade_level = 0.0f;
+				}
 			}
-		}
-		time_last = time;
-	}
 
-	hsv[0] = hsv[1] = hsv[2] = 0.0f;
+			hsv[2] = sin(fade_level * 1.57 + 4.71) + 1.0f;
+			hsv2rgb(hsv, rgb);
 
-	for(uint8_t i = 0; i < ECHO_PAT_LEN; i++){
-		if(echo_pattern_data[i].level > 0.0f){
-			//should we update?
-			if(time >= echo_pattern_data[i].next_update){
-				//swap the on state
-				echo_pattern_data[i].on = !echo_pattern_data[i].on;
-
-				//if it is on
-				if(echo_pattern_data[i].on){
-					echo_pattern_data[i].level += 
-						echo_pattern_data[i].level_mod;
-
-					if(echo_pattern_data[i].level <= 0.0f){
-						echo_pattern_data[i].level = 0;
-						continue;
+			for(uint8_t i = 0; i < NumLEDs; i++){
+				for(uint8_t j = 0; j < 3; j++)
+					LEDChannels[i][j] = rgb[j];
+			}
+			break;
+		case QUAD_ECHO:
+			clear();
+			if(trig){
+				if(time_last != 0){
+					long interval = (time - time_last) / 2;
+					if(interval > (ECHO_PAT_ON_LEN + 20) && interval < 500){
+						uint8_t span = 1;
+						float hue = (float)random(256) / 256.0f;
+						//every once in a while draw to the whole ring..
+						if(random(255) > 170)
+							span = 4;
+						for(uint8_t i = 0; i < span; i++){
+							hsv[0] = (float)random(256) / 256.0f;
+							echo_pattern_data[echo_pattern_index].interval = interval;
+							echo_pattern_data[echo_pattern_index].next_update = time + ECHO_PAT_ON_LEN;
+							echo_pattern_data[echo_pattern_index].level = 1.0;
+							echo_pattern_data[echo_pattern_index].level_mod = -0.15;
+							echo_pattern_data[echo_pattern_index].on = true;
+							echo_pattern_data[echo_pattern_index].hue = hue;
+							echo_pattern_index = (echo_pattern_index + 1) % ECHO_PAT_LEN;
+						}
 					}
-					//next update
-					echo_pattern_data[i].next_update += ECHO_PAT_ON_LEN;
-
-					//off
-				} else {
-					//next update
-					echo_pattern_data[i].next_update += 
-						(echo_pattern_data[i].interval - ECHO_PAT_ON_LEN);
 				}
-				echo_pattern_data[i].last_update = time;
+				time_last = time;
 			}
 
-			if(echo_pattern_data[i].on){
-				hsv[0] = echo_pattern_data[i].hue;
-				hsv[1] = 1.0;
-				//hsv[2] = sin((1.0f - echo_pattern_data[i].level) * 1.57 + 4.71) + 1.0f;
-				hsv[2] = echo_pattern_data[i].level;
-				hsv2rgb(hsv, rgb);
-				for(uint8_t j = (i * 6); j < (i * 6 + 6); j++){
-					for(uint8_t k = 0; k < 3; k++)
-						LEDChannels[j][k] = rgb[k];
+			hsv[0] = hsv[1] = hsv[2] = 0.0f;
+
+			for(uint8_t i = 0; i < ECHO_PAT_LEN; i++){
+				if(echo_pattern_data[i].level > 0.0f){
+					//should we update?
+					if(time >= echo_pattern_data[i].next_update){
+						//swap the on state
+						echo_pattern_data[i].on = !echo_pattern_data[i].on;
+
+						//if it is on
+						if(echo_pattern_data[i].on){
+							echo_pattern_data[i].level += 
+								echo_pattern_data[i].level_mod;
+
+							if(echo_pattern_data[i].level <= 0.0f){
+								echo_pattern_data[i].level = 0;
+								continue;
+							}
+							//next update
+							echo_pattern_data[i].next_update += ECHO_PAT_ON_LEN;
+
+							//off
+						} else {
+							//next update
+							echo_pattern_data[i].next_update += 
+								(echo_pattern_data[i].interval - ECHO_PAT_ON_LEN);
+						}
+					}
+
+					if(echo_pattern_data[i].on){
+						hsv[0] = echo_pattern_data[i].hue;
+						hsv[1] = 1.0;
+						//hsv[2] = sin((1.0f - echo_pattern_data[i].level) * 1.57 + 4.71) + 1.0f;
+						hsv[2] = echo_pattern_data[i].level;
+						hsv2rgb(hsv, rgb);
+						for(uint8_t j = (i * 6); j < (i * 6 + 6); j++){
+							for(uint8_t k = 0; k < 3; k++)
+								LEDChannels[j][k] = rgb[k];
+						}
+					}
 				}
 			}
-		}
+			break;
+		default:
+			break;
 	}
-	/*
 
-	for(uint8_t i = 0; i < NumLEDs; i++){
-		for(uint8_t j = 0; j < 3; j++)
-			LEDChannels[i][j] = rgb[j];
-	}
-	*/
 	WriteLEDArray();
 }
 
@@ -278,14 +298,8 @@ void loop() {
 		}
 	}
 
+	//draw on a trig, or every 2 milliseconds
 	if(trig || (time % 2 == 0)){
-		draw(time, trig);
+		draw(led_pattern, time, trig);
 	}
-	
-	/*
-	hsv[0] = (hsv[0] + 0.01);
-	if(hsv[0] > 1.0f)
-		hsv[0] = 0.0f;
-		*/
-
 }
