@@ -50,6 +50,7 @@ typedef struct _rotation_guy_t {
 typedef struct _rotation_pattern {
 	rotation_guy_t guys[ROTATION_GUY_COUNT];
 	uint8_t index;
+	unsigned long last_time;
 } rotation_pattern_t;
 
 rotation_pattern_t rotation_pattern_data;
@@ -132,6 +133,7 @@ void set_pattern(pattern_t new_pat){
 			break;
 		case ROTATION:
 			rotation_pattern_data.index = 0;
+			rotation_pattern_data.last_time = 0;
 			for(uint8_t i = 0; i < ROTATION_GUY_COUNT; i++)
 				rotation_pattern_data.guys[i].active = false;
 			break;
@@ -158,7 +160,7 @@ void update(){
 void setup() {
 
 	//init the pattern
-	set_pattern(FADE);
+	set_pattern(ROTATION);
 
 	hist = 0;
 	but_hist = 0;
@@ -296,24 +298,33 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 		case ROTATION:
 			clear();
 			if(trig){
-				guy = &rotation_pattern_data.guys[rotation_pattern_data.index];
-				//increment for next time
-				rotation_pattern_data.index = (rotation_pattern_data.index + 1) % ROTATION_GUY_COUNT;
-				guy->active = true;
-				if(random(255) > 170)
-					guy->length = random(4);
-				else
-					guy->length = 1;
-				guy->position = random(NumLEDs);
-				guy->position_mod = 0.01;
-				guy->hue = (float)random(256) / 256.0f;
+				if(rotation_pattern_data.last_time != 0){
+					guy = &rotation_pattern_data.guys[rotation_pattern_data.index];
+					//increment for next time
+					rotation_pattern_data.index = (rotation_pattern_data.index + 1) % ROTATION_GUY_COUNT;
+					guy->active = true;
+					if(random(255) > 170)
+						guy->length = random(4);
+					else
+						guy->length = 1;
+					guy->position = 0.0f;
+					guy->position_mod = 12.0f / (float)(time - rotation_pattern_data.last_time);
+					guy->hue = (float)random(256) / 256.0f;
+				}
+				rotation_pattern_data.last_time = time;
 			}
 			for(uint8_t i = 0; i < ROTATION_GUY_COUNT; i++){
 				guy = &rotation_pattern_data.guys[i];
 				if(guy->active){
+					//on a trig, reverse
+					if(trig)
+						guy->position_mod = -guy->position_mod;
 					guy->position += guy->position_mod;
-					if(guy->position >= NumLEDs)
+					//keep in range
+					while(guy->position >= NumLEDs)
 						guy->position -= NumLEDs;
+					while(guy->position < 0.0f)
+						guy->position += NumLEDs;
 					hsv[0] = guy->hue;
 					hsv[1] = 1.0;
 					hsv[2] = 1.0;
