@@ -239,6 +239,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 							echo_pattern_data[i].level += 
 								echo_pattern_data[i].level_mod;
 
+							//if the level becomes less than or equal to zero skip this quad
 							if(echo_pattern_data[i].level <= 0.0f){
 								echo_pattern_data[i].level = 0;
 								continue;
@@ -254,6 +255,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 						}
 					}
 
+					//if the quad is on then draw it to its quad
 					if(echo_pattern_data[i].on){
 						hsv[0] = echo_pattern_data[i].hue;
 						hsv[1] = 1.0;
