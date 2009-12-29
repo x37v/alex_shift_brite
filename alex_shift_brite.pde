@@ -13,7 +13,8 @@
 
 typedef enum {
 	FADE,
-	QUAD_ECHO
+	QUAD_ECHO,
+	ROTATION
 } pattern_t;
 
 volatile pattern_t led_pattern;
@@ -36,6 +37,22 @@ typedef struct _echo_pattern_data_t {
 #define ECHO_PAT_ON_LEN 40
 volatile echo_pattern_data_t echo_pattern_data[ECHO_PAT_LEN];
 volatile uint8_t echo_pattern_index;
+
+#define ROTATION_GUY_COUNT 6
+typedef struct _rotation_guy_t {
+	bool active;
+	float position;
+	float position_mod;
+	float hue;
+	uint8_t length;
+} rotation_guy_t;
+
+typedef struct _rotation_pattern {
+	rotation_guy_t guys[ROTATION_GUY_COUNT];
+	uint8_t index;
+} rotation_pattern_t;
+
+rotation_pattern_t rotation_pattern_data;
 
 uint8_t but_hist;
 uint8_t hist;
@@ -113,6 +130,11 @@ void set_pattern(pattern_t new_pat){
 			}
 			echo_pattern_index = 0;
 			break;
+		case ROTATION:
+			rotation_pattern_data.index = 0;
+			for(uint8_t i = 0; i < ROTATION_GUY_COUNT; i++)
+				rotation_pattern_data.guys[i].active = false;
+			break;
 		default:
 			break;
 	}
@@ -172,6 +194,7 @@ void setup() {
 
 void draw(pattern_t pattern, unsigned long time, bool trig){
 	uint16_t rgb[3];
+	rotation_guy_t * guy = NULL;
 
 	switch(pattern){
 		case FADE:
@@ -266,6 +289,40 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 							for(uint8_t k = 0; k < 3; k++)
 								LEDChannels[j][k] = rgb[k];
 						}
+					}
+				}
+			}
+			break;
+		case ROTATION:
+			clear();
+			if(trig){
+				guy = &rotation_pattern_data.guys[rotation_pattern_data.index];
+				//increment for next time
+				rotation_pattern_data.index = (rotation_pattern_data.index + 1) % ROTATION_GUY_COUNT;
+				guy->active = true;
+				if(random(255) > 170)
+					guy->length = random(4);
+				else
+					guy->length = 1;
+				guy->position = random(NumLEDs);
+				guy->position_mod = 0.01;
+				guy->hue = (float)random(256) / 256.0f;
+			}
+			for(uint8_t i = 0; i < ROTATION_GUY_COUNT; i++){
+				guy = &rotation_pattern_data.guys[i];
+				if(guy->active){
+					guy->position += guy->position_mod;
+					if(guy->position >= NumLEDs)
+						guy->position -= NumLEDs;
+					hsv[0] = guy->hue;
+					hsv[1] = 1.0;
+					hsv[2] = 1.0;
+					hsv2rgb(hsv, rgb);
+					//just for now, draw over whatever is there
+					for(uint8_t j = 0; j < guy->length; j++){
+						uint8_t idx = (uint8_t)(j + guy->position) % NumLEDs;
+						for(uint8_t k = 0; k < 3; k++)
+							LEDChannels[idx][k] = rgb[k];
 					}
 				}
 			}
