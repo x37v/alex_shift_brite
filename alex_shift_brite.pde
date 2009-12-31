@@ -39,7 +39,8 @@ typedef struct _fade_pattern_data_t {
 
 fade_pattern_data_t fade_pattern_data;
 
-#define FADE_PATTERN_EVOLVE_DELAY 200
+#define FADE_EVOLVE_DELAY 200
+#define WIPE_EVOLVE_DELAY 1000
 
 typedef struct _echo_pattern_data_t {
 	unsigned long next_update;
@@ -80,6 +81,7 @@ typedef struct _wipe_pattern_data_t {
 	float position_mod;
 	float hue;
 	unsigned long last_time;
+	unsigned long start_evolve;
 } wipe_pattern_data_t;
 
 wipe_pattern_data_t wipe_pattern_data;
@@ -180,6 +182,7 @@ void set_pattern(pattern_t new_pat){
 			wipe_pattern_data.last_time = 0;
 			wipe_pattern_data.position = 0;
 			wipe_pattern_data.hue = (float)random(256) / 256.0f;
+			wipe_pattern_data.start_evolve = 0;
 			break;
 		default:
 			break;
@@ -248,8 +251,8 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 
 				if(fade_pattern_data.fade_level >= 1.0f){
 					fade_pattern_data.fade_level = 1.0f;
-					//after FADE_PATTERN_EVOLVE_DELAY, evolve
-					fade_pattern_data.start_evolve = time + FADE_PATTERN_EVOLVE_DELAY;
+					//after FADE_EVOLVE_DELAY, evolve
+					fade_pattern_data.start_evolve = time + FADE_EVOLVE_DELAY;
 				}
 			} else if(fade_pattern_data.start_evolve && 
 					fade_pattern_data.start_evolve <= time){
@@ -401,6 +404,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 							wipe_pattern_data.hue += 0.501;
 						while(wipe_pattern_data.hue >= 1.0)
 							wipe_pattern_data.hue -= 1.0;
+						wipe_pattern_data.start_evolve = 0;
 					}
 				}
 				wipe_pattern_data.last_time = time;
@@ -429,6 +433,29 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 					wipe_pattern_data.position += wipe_pattern_data.position_mod;
 				} else {
 					wipe_pattern_data.active = false;
+					wipe_pattern_data.start_evolve = time + WIPE_EVOLVE_DELAY;
+					//now used as a level
+					wipe_pattern_data.position = 1.0;
+				}
+			} else if(wipe_pattern_data.start_evolve) {
+				if(time >= wipe_pattern_data.start_evolve){
+					if(time % 10 == 0){
+						//use position as level
+						wipe_pattern_data.position -= 0.001;
+						if(wipe_pattern_data.position < 0.0)
+							wipe_pattern_data.position = 0;
+						if(wipe_pattern_data.position > 1.0)
+							wipe_pattern_data.position = 1.0;
+
+						hsv[0] = wipe_pattern_data.hue;
+						hsv[1] = 1.0;
+						hsv[2] = wipe_pattern_data.position;
+						hsv2rgb(hsv, rgb);
+						for(uint8_t i = 0; i < NumLEDs; i++){
+							for(uint8_t j = 0; j < 3; j++)
+								LEDChannels[i][j] = rgb[j];
+						}
+					}
 				}
 			}
 			break;
