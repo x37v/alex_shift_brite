@@ -3,11 +3,11 @@
 #define enablepin 10 // EI
 #define latchpin 9 // LI
 
-#define TRIGGER_PIN 3
-#define TRIGGER_GND 4
+#define PATTERN_SEL_PIN 3
+#define PATTERN_SEL_GND 4
 
 #define ANALOG_TRIGGER_PIN 0
-#define ANALOG_TRIGGER_GND 7
+#define ANALOG_PATTERN_SEL_GND 7
 
 #include "hsvrgb.h"
 #include "math.h"
@@ -22,7 +22,9 @@ volatile unsigned long trigger_next;
 typedef enum {
 	FADE,
 	QUAD_ECHO,
-	ROTATION
+	ROTATION,
+	WIPE,
+	PATTERN_T_END
 } pattern_t;
 
 volatile pattern_t led_pattern;
@@ -50,7 +52,7 @@ typedef struct _echo_pattern_data_t {
 
 #define ECHO_PAT_LEN 4
 //ms
-#define ECHO_PAT_ON_LEN 40
+#define ECHO_PAT_ON_LEN 60
 volatile echo_pattern_data_t echo_pattern_data[ECHO_PAT_LEN];
 volatile uint8_t echo_pattern_index;
 
@@ -137,7 +139,6 @@ void WriteLEDArray() {
 void set_pattern(pattern_t new_pat){
 	led_pattern = new_pat;
 
-	//reset hsv
 	hsv[0] = 0.0;
 	hsv[1] = 1.0;
 	hsv[2] = 0.0;
@@ -165,25 +166,10 @@ void set_pattern(pattern_t new_pat){
 	}
 }
 
-/*
-void update(){
-	unsigned long time = millis();
-
-	if(time_last + 5 < time){
-		hsv[0] = (float)random(256) / 256.0f;
-
-		if(time_last != 0){
-			global_interval = time - time_last;
-		}
-		time_last = time;
-	}
-}
-*/
-
 void setup() {
 
 	//init the pattern
-	set_pattern(FADE);
+	set_pattern(QUAD_ECHO);
 
 	hist = 0;
 	but_hist = 0;
@@ -200,17 +186,17 @@ void setup() {
    digitalWrite(enablepin, LOW);
 
 	//set the trigger ground to be an output, set it to zero
-	pinMode(TRIGGER_GND, OUTPUT);
-	digitalWrite(TRIGGER_GND, LOW);
+	pinMode(PATTERN_SEL_GND, OUTPUT);
+	digitalWrite(PATTERN_SEL_GND, LOW);
 
 	//set the analog trigger to be an output and set to zero
-	pinMode(ANALOG_TRIGGER_GND, OUTPUT);
-	digitalWrite(ANALOG_TRIGGER_GND, LOW);
+	pinMode(ANALOG_PATTERN_SEL_GND, OUTPUT);
+	digitalWrite(ANALOG_PATTERN_SEL_GND, LOW);
 
 	//set the trigger pin to be an input, with pullup
-	pinMode(TRIGGER_PIN, INPUT);
-	DDRD &= ~(1 << TRIGGER_PIN);
-	PORTD |= (1 << TRIGGER_PIN);
+	pinMode(PATTERN_SEL_PIN, INPUT);
+	DDRD &= ~(1 << PATTERN_SEL_PIN);
+	PORTD |= (1 << PATTERN_SEL_PIN);
 
 	clear();
 	delay(10);
@@ -268,12 +254,14 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 			clear();
 			if(trig){
 				if(time_last != 0){
-					long interval = (time - time_last) / 2;
-					if(interval > (ECHO_PAT_ON_LEN + 20) && interval < 500){
+					long interval = (time - time_last);
+					if(interval >= 700)
+						interval = interval >> 1;
+					if(interval > (ECHO_PAT_ON_LEN + 20) && interval < 700){
 						uint8_t span = 1;
 						float hue = (float)random(256) / 256.0f;
 						//every once in a while draw to the whole ring..
-						if(random(255) > 170)
+						if(random(255) > 200)
 							span = 4;
 						for(uint8_t i = 0; i < span; i++){
 							hsv[0] = (float)random(256) / 256.0f;
@@ -347,7 +335,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 						guy->length = random(4);
 					else
 						guy->length = 1;
-					guy->position = 0.0f;
+					guy->position = random(NumLEDs);
 					guy->position_mod = 12.0f / (float)(time - rotation_pattern_data.last_time);
 					guy->hue = (float)random(256) / 256.0f;
 				}
@@ -390,9 +378,8 @@ void loop() {
 	uint8_t analog_val = analogRead(ANALOG_TRIGGER_PIN);
 	bool trig = false;
 
-	/*
 	//check for a trigger
-	if(digitalRead(TRIGGER_PIN))
+	if(digitalRead(PATTERN_SEL_PIN))
 		but_hist |= (1 << hist);
 	else
 		but_hist &= ~(1 << hist);
@@ -405,16 +392,18 @@ void loop() {
 		//down
 	} else if(but_hist == 0x00){
 		if(!down){
+			//XXX
+			//set_pattern((pattern_t)((led_pattern + 1) % PATTERN_T_END));
 			trig = true;
 			down = true;
 		}
 	}
-	*/
 
 	//if we're above the threshold and the time is greater than
 	//the time threshold
 	if(analog_val >= ANALOG_THRES && time >= trigger_next ){
-		trig = true;
+		//XXX
+		//trig = true;
 		//set the minimum time for the next trigger
 		trigger_next = time + TRIGGER_MIN_INTERVAL;
 	}
