@@ -73,6 +73,17 @@ typedef struct _rotation_pattern {
 
 rotation_pattern_t rotation_pattern_data;
 
+typedef struct _wipe_pattern_data_t {
+	bool active;
+	bool wipe_forward;
+	float position;
+	float position_mod;
+	float hue;
+	unsigned long last_time;
+} wipe_pattern_data_t;
+
+wipe_pattern_data_t wipe_pattern_data;
+
 uint8_t but_hist;
 uint8_t hist;
 bool down;
@@ -143,6 +154,9 @@ void set_pattern(pattern_t new_pat){
 	hsv[1] = 1.0;
 	hsv[2] = 0.0;
 
+	//clear what has been drawn
+	clear();
+
 	switch(led_pattern){
 		case FADE:
 			fade_pattern_data.fade_level = 0.0;
@@ -161,6 +175,12 @@ void set_pattern(pattern_t new_pat){
 			for(uint8_t i = 0; i < ROTATION_GUY_COUNT; i++)
 				rotation_pattern_data.guys[i].active = false;
 			break;
+		case WIPE:
+			wipe_pattern_data.active = false;
+			wipe_pattern_data.last_time = 0;
+			wipe_pattern_data.position = 0;
+			wipe_pattern_data.hue = (float)random(256) / 256.0f;
+			break;
 		default:
 			break;
 	}
@@ -169,7 +189,7 @@ void set_pattern(pattern_t new_pat){
 void setup() {
 
 	//init the pattern
-	set_pattern(QUAD_ECHO);
+	set_pattern(WIPE);
 
 	hist = 0;
 	but_hist = 0;
@@ -363,6 +383,52 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 						for(uint8_t k = 0; k < 3; k++)
 							LEDChannels[idx][k] = rgb[k];
 					}
+				}
+			}
+			break;
+		case WIPE:
+			if(trig){
+				if(wipe_pattern_data.last_time != 0){
+					unsigned long interval = time - wipe_pattern_data.last_time;
+					if(interval > 20){
+						wipe_pattern_data.position = 0;
+						wipe_pattern_data.wipe_forward = !wipe_pattern_data.wipe_forward;
+						wipe_pattern_data.position_mod = (float)NumLEDs / (float)(interval >> 1);
+						wipe_pattern_data.active = true;
+						if(wipe_pattern_data.wipe_forward)
+							wipe_pattern_data.hue += 0.2511;
+						else
+							wipe_pattern_data.hue += 0.501;
+						while(wipe_pattern_data.hue >= 1.0)
+							wipe_pattern_data.hue -= 1.0;
+					}
+				}
+				wipe_pattern_data.last_time = time;
+			}
+			if(wipe_pattern_data.active){
+				//if we're in range, draw
+				if(wipe_pattern_data.position < NumLEDs){
+					int8_t idx;
+					hsv[0] = wipe_pattern_data.hue;
+					hsv[1] = 1.0;
+					hsv[2] = 1.0;
+					hsv2rgb(hsv, rgb);
+					if(wipe_pattern_data.wipe_forward)
+						idx = (int8_t)wipe_pattern_data.position;
+					else
+						idx = NumLEDs - (int8_t)wipe_pattern_data.position - 1;
+
+					if(idx < 0)
+						idx = 0;
+					else if(idx >= NumLEDs)
+						idx = NumLEDs - 1;
+
+					for(uint8_t i = 0; i < 3; i++)
+						LEDChannels[idx][i] = rgb[i];
+					//increment position
+					wipe_pattern_data.position += wipe_pattern_data.position_mod;
+				} else {
+					wipe_pattern_data.active = false;
 				}
 			}
 			break;
