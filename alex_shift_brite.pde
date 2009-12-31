@@ -136,6 +136,12 @@ void WriteLEDArray() {
 
 void set_pattern(pattern_t new_pat){
 	led_pattern = new_pat;
+
+	//reset hsv
+	hsv[0] = 0.0;
+	hsv[1] = 1.0;
+	hsv[2] = 0.0;
+
 	switch(led_pattern){
 		case FADE:
 			fade_pattern_data.fade_level = 0.0;
@@ -209,9 +215,6 @@ void setup() {
 	clear();
 	delay(10);
 	WriteLEDArray();
-	hsv[0] = 0.0;
-	hsv[1] = 1.0;
-	hsv[2] = 0.0;
 
 	//global_interval = 0;
 	time_last = 0;
@@ -223,13 +226,15 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 
 	switch(pattern){
 		case FADE:
+			hsv[1] = 1.0;
 			//fade in on trig
 			if(trig){
 				hsv[0] = (float)random(256) / 256.0f;
 				fade_pattern_data.fade_level = 0.01;
 				fade_pattern_data.start_evolve = 0;
 
-			} else if(fade_pattern_data.fade_level > 0.0f){
+			} else if(fade_pattern_data.start_evolve == 0 && 
+					fade_pattern_data.fade_level > 0.0f){
 				fade_pattern_data.fade_level = (fade_pattern_data.fade_level + 0.003);
 
 				if(hsv[0] >= 1.0f)
@@ -240,12 +245,15 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 					//after FADE_PATTERN_EVOLVE_DELAY, evolve
 					fade_pattern_data.start_evolve = time + FADE_PATTERN_EVOLVE_DELAY;
 				}
-			}
-			if(fade_pattern_data.start_evolve && 
-					fade_pattern_data.start_evolve >= time){
+			} else if(fade_pattern_data.start_evolve && 
+					fade_pattern_data.start_evolve <= time){
+				//increment the color slowly over time
 				hsv[0] += 0.0001;
 				if(hsv[0] >= 1.0f)
 					hsv[0] -= 1.0f;
+				//reduce the brightness to half during the evolving colors
+				if(fade_pattern_data.fade_level > 0.5)
+					fade_pattern_data.fade_level -= 0.001;
 			}
 
 			hsv[2] = sin(fade_pattern_data.fade_level * 1.57 + 4.71) + 1.0f;
