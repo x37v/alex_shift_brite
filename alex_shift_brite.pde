@@ -6,10 +6,18 @@
 #define TRIGGER_PIN 3
 #define TRIGGER_GND 4
 
+#define ANALOG_TRIGGER_PIN 0
+#define ANALOG_TRIGGER_GND 7
+
 #include "hsvrgb.h"
 #include "math.h"
 
 #define NumLEDs 24
+
+#define ANALOG_THRES 170
+#define TRIGGER_MIN_INTERVAL 200
+
+volatile unsigned long trigger_next;
 
 typedef enum {
 	FADE,
@@ -20,11 +28,19 @@ typedef enum {
 volatile pattern_t led_pattern;
 
 float hsv[3];
-float fade_level;
 #define HIST_LEN 4
 
+typedef struct _fade_pattern_data_t {
+	float fade_level;
+	unsigned long start_evolve;
+} fade_pattern_data_t;
+
+fade_pattern_data_t fade_pattern_data;
+
+#define FADE_PATTERN_EVOLVE_DELAY 200
+
 typedef struct _echo_pattern_data_t {
-	long next_update;
+	unsigned long next_update;
 	bool on;
 	long interval;
 	float level;
@@ -122,7 +138,8 @@ void set_pattern(pattern_t new_pat){
 	led_pattern = new_pat;
 	switch(led_pattern){
 		case FADE:
-			fade_level = 0.0;
+			fade_pattern_data.fade_level = 0.0;
+			fade_pattern_data.start_evolve = 0;
 			break;
 		case QUAD_ECHO:
 			//a zero level means do not draw
@@ -160,11 +177,13 @@ void update(){
 void setup() {
 
 	//init the pattern
-	set_pattern(ROTATION);
+	set_pattern(FADE);
 
 	hist = 0;
 	but_hist = 0;
 	down = false;
+
+	trigger_next = 0;
 
    pinMode(datapin, OUTPUT);
    pinMode(latchpin, OUTPUT);
@@ -177,6 +196,10 @@ void setup() {
 	//set the trigger ground to be an output, set it to zero
 	pinMode(TRIGGER_GND, OUTPUT);
 	digitalWrite(TRIGGER_GND, LOW);
+
+	//set the analog trigger to be an output and set to zero
+	pinMode(ANALOG_TRIGGER_GND, OUTPUT);
+	digitalWrite(ANALOG_TRIGGER_GND, LOW);
 
 	//set the trigger pin to be an input, with pullup
 	pinMode(TRIGGER_PIN, INPUT);
@@ -203,20 +226,29 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 			//fade in on trig
 			if(trig){
 				hsv[0] = (float)random(256) / 256.0f;
-				fade_level = 0.01;
+				fade_pattern_data.fade_level = 0.01;
+				fade_pattern_data.start_evolve = 0;
 
-			} else if(fade_level > 0.0f){
-				fade_level = (fade_level + 0.005);
+			} else if(fade_pattern_data.fade_level > 0.0f){
+				fade_pattern_data.fade_level = (fade_pattern_data.fade_level + 0.003);
 
 				if(hsv[0] >= 1.0f)
 					hsv[0] -= 1.0f;
 
-				if(fade_level > 1.0f){
-					fade_level = 0.0f;
+				if(fade_pattern_data.fade_level >= 1.0f){
+					fade_pattern_data.fade_level = 1.0f;
+					//after FADE_PATTERN_EVOLVE_DELAY, evolve
+					fade_pattern_data.start_evolve = time + FADE_PATTERN_EVOLVE_DELAY;
 				}
 			}
+			if(fade_pattern_data.start_evolve && 
+					fade_pattern_data.start_evolve >= time){
+				hsv[0] += 0.0001;
+				if(hsv[0] >= 1.0f)
+					hsv[0] -= 1.0f;
+			}
 
-			hsv[2] = sin(fade_level * 1.57 + 4.71) + 1.0f;
+			hsv[2] = sin(fade_pattern_data.fade_level * 1.57 + 4.71) + 1.0f;
 			hsv2rgb(hsv, rgb);
 
 			for(uint8_t i = 0; i < NumLEDs; i++){
@@ -347,8 +379,10 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 
 void loop() {
 	unsigned long time = millis();
+	uint8_t analog_val = analogRead(ANALOG_TRIGGER_PIN);
 	bool trig = false;
 
+	/*
 	//check for a trigger
 	if(digitalRead(TRIGGER_PIN))
 		but_hist |= (1 << hist);
@@ -366,6 +400,15 @@ void loop() {
 			trig = true;
 			down = true;
 		}
+	}
+	*/
+
+	//if we're above the threshold and the time is greater than
+	//the time threshold
+	if(analog_val >= ANALOG_THRES && time >= trigger_next ){
+		trig = true;
+		//set the minimum time for the next trigger
+		trigger_next = time + TRIGGER_MIN_INTERVAL;
 	}
 
 	//draw on a trig, or every 2 milliseconds
