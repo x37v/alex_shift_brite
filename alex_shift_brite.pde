@@ -7,7 +7,8 @@
 #define PATTERN_SEL_GND 4
 
 #define ANALOG_TRIGGER_PIN 0
-#define ANALOG_PATTERN_SEL_GND 7
+//15 == analog 1
+#define ANALOG_PATTERN_SEL_GND 15
 
 #include "hsvrgb.h"
 #include "math.h"
@@ -204,7 +205,7 @@ void set_pattern(pattern_t new_pat){
 void setup() {
 
 	//init the pattern
-	set_pattern(ROTATION);
+	set_pattern(FADE);
 
 	hist = 0;
 	but_hist = 0;
@@ -516,9 +517,7 @@ void loop() {
 		//down
 	} else if(but_hist == 0x00){
 		if(!down){
-			//XXX
-			//set_pattern((pattern_t)((led_pattern + 1) % PATTERN_T_END));
-			trig = true;
+			set_pattern((pattern_t)((led_pattern + 1) % PATTERN_T_END));
 			down = true;
 		}
 	}
@@ -526,8 +525,7 @@ void loop() {
 	//if we're above the threshold and the time is greater than
 	//the time threshold
 	if(analog_val >= ANALOG_THRES && time >= trigger_next ){
-		//XXX
-		//trig = true;
+		trig = true;
 		//set the minimum time for the next trigger
 		trigger_next = time + TRIGGER_MIN_INTERVAL;
 	}
