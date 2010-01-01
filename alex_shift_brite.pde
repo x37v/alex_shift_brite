@@ -58,6 +58,7 @@ volatile echo_pattern_data_t echo_pattern_data[ECHO_PAT_LEN];
 volatile uint8_t echo_pattern_index;
 
 #define ROTATION_GUY_COUNT 6
+#define ROTATION_ACCEL_TIME 80
 typedef struct _rotation_guy_t {
 	bool active;
 	float position;
@@ -174,8 +175,19 @@ void set_pattern(pattern_t new_pat){
 		case ROTATION:
 			rotation_pattern_data.index = 0;
 			rotation_pattern_data.last_time = 0;
-			for(uint8_t i = 0; i < ROTATION_GUY_COUNT; i++)
+			for(uint8_t i = 0; i < ROTATION_GUY_COUNT; i++){
 				rotation_pattern_data.guys[i].active = false;
+				/*
+				rotation_pattern_data.guys[i].position = random(NumLEDs);
+				rotation_pattern_data.guys[i].position_mod = (float)random(24) / 127.0 + 0.001;
+				if(random(2)){
+					rotation_pattern_data.guys[i].position_mod = 
+						-rotation_pattern_data.guys[i].position_mod;
+				}
+				rotation_pattern_data.guys[i].hue = (float)random(256) / 256.0f;
+				rotation_pattern_data.guys[i].length = 1;
+				*/
+			}
 			break;
 		case WIPE:
 			wipe_pattern_data.active = false;
@@ -192,7 +204,7 @@ void set_pattern(pattern_t new_pat){
 void setup() {
 
 	//init the pattern
-	set_pattern(WIPE);
+	set_pattern(ROTATION);
 
 	hist = 0;
 	but_hist = 0;
@@ -232,6 +244,7 @@ void setup() {
 void draw(pattern_t pattern, unsigned long time, bool trig){
 	uint16_t rgb[3];
 	rotation_guy_t * guy = NULL;
+	bool faster = false;
 
 	switch(pattern){
 		case FADE:
@@ -349,28 +362,46 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 		case ROTATION:
 			clear();
 			if(trig){
-				if(rotation_pattern_data.last_time != 0){
+				unsigned long interval = time - rotation_pattern_data.last_time;
+				if(rotation_pattern_data.last_time != 0 &&
+						interval > 100 &&
+						random(10) > 6){
 					guy = &rotation_pattern_data.guys[rotation_pattern_data.index];
 					//increment for next time
 					rotation_pattern_data.index = (rotation_pattern_data.index + 1) % ROTATION_GUY_COUNT;
 					guy->active = true;
 					if(random(255) > 170)
-						guy->length = random(4);
+						guy->length = random(3) + 1;
 					else
 						guy->length = 1;
 					guy->position = random(NumLEDs);
-					guy->position_mod = 12.0f / (float)(time - rotation_pattern_data.last_time);
+					guy->position_mod = (float)NumLEDs / (float)(interval);
 					guy->hue = (float)random(256) / 256.0f;
 				}
+				//very seldomly, change direction
+				if(random(255) > 230){
+					for(uint8_t i = 0; i < ROTATION_GUY_COUNT; i++){
+						rotation_pattern_data.guys[i].position_mod = 
+							-rotation_pattern_data.guys[i].position_mod;
+					}
+				}
 				rotation_pattern_data.last_time = time;
+				faster = true;
+			} else if(rotation_pattern_data.last_time + ROTATION_ACCEL_TIME > time){
+				faster = true;
 			}
 			for(uint8_t i = 0; i < ROTATION_GUY_COUNT; i++){
 				guy = &rotation_pattern_data.guys[i];
 				if(guy->active){
+					/*
 					//on a trig, reverse
 					if(trig)
 						guy->position_mod = -guy->position_mod;
-					guy->position += guy->position_mod;
+						*/
+					if(faster)
+						guy->position += (4 * guy->position_mod);
+					else
+						guy->position += guy->position_mod;
 					//keep in range
 					while(guy->position >= NumLEDs)
 						guy->position -= NumLEDs;
