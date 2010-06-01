@@ -7,6 +7,13 @@
 void hsv2rgb(float hsv[3], uint16_t (&rgb)[3]){
 	float p, q, t, h_6, f, v;
 	uint8_t h_i;
+	//clamp
+	for (unsigned int i = 0; i < 3; i++) {
+		if (hsv[i] > 1.0f)
+			hsv[i] = 1.0f;
+		else if (hsv[i] < 0.0f)
+			hsv[i] = 0.0f;
+	}
 
 	h_6 = hsv[0] * 6;
 	h_i = (uint8_t)h_6 % 6;
