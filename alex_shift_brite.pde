@@ -21,11 +21,13 @@
 volatile unsigned long trigger_next;
 
 typedef enum {
-	FADE,
-	QUAD_ECHO,
-	ROTATION,
-	WIPE,
+	NONE,
 	GUYS,
+	MODE_WIPE,
+	//FADE,
+	//QUAD_ECHO,
+	//ROTATION,
+	//WIPE,
 	PATTERN_T_END
 } pattern_t;
 
@@ -172,8 +174,34 @@ void WriteLEDArray() {
 }
 
 void set_pattern(pattern_t new_pat){
-#if 0
+	
 	led_pattern = new_pat;
+	//do all the set up we need
+	switch(led_pattern) {
+		case GUYS:
+			clear();
+			light_guys_index = 0;
+			//init light_guys
+			for (unsigned int i = 0; i < NUM_LIGHT_GUYS; i++) {
+				light_guys[i].active = false;
+				light_guys[i].position = random(NUM_LEDS) % NUM_LEDS;
+				light_guys[i].position_mod = 0.0;
+				light_guys[i].hv[0] = (float)random(256) / 256.0f;
+				light_guys[i].hv[1] = 1.0f;
+				light_guys[i].fbdk[0] = 0.0f;
+				light_guys[i].fbdk[1] = 0.96f;
+				//reset the draw buffer
+				for(unsigned int j = 0; j < NUM_LEDS; j++) {
+					light_guys[i].draw_buffer[j][0] = 0.0;
+					light_guys[i].draw_buffer[j][1] = 0.0;
+				}
+			}
+			break;
+		default:
+			break;
+	}
+
+#if 0
 
 	hsv[0] = 0.0;
 	hsv[1] = 1.0;
@@ -227,7 +255,8 @@ void set_pattern(pattern_t new_pat){
 void setup() {
 
 	//init the pattern
-	set_pattern(FADE);
+	set_pattern(NONE);
+	set_pattern(GUYS);
 
 	hist = 0;
 	but_hist = 0;
@@ -263,169 +292,127 @@ void setup() {
 	//global_interval = 0;
 	time_last = 0;
 
-	light_guys_index = 0;
-	for (unsigned int i = 0; i < NUM_LIGHT_GUYS; i++) {
-		//init light_guys
-		light_guys[i].active = false;
-		light_guys[i].position = random(NUM_LEDS) % NUM_LEDS;
-		light_guys[i].position_mod = 0.0;
-		light_guys[i].hv[0] = (float)random(256) / 256.0f;
-		light_guys[i].hv[1] = 1.0f;
-		light_guys[i].fbdk[0] = 0.0f;
-		light_guys[i].fbdk[1] = 0.96f;
-		/*
-		if (i == 0) {
-			light_guys[i].fbdk[1] = 0.98f;
-			light_guys[i].fbdk[0] = 0.002f;
-		} else {
-			light_guys[i].fbdk[1] = 0.96f;
-		}
-		*/
-		for(unsigned int j = 0; j < NUM_LEDS; j++) {
-			light_guys[i].draw_buffer[j][0] = 0.0;
-			light_guys[i].draw_buffer[j][1] = 0.0;
-		}
-	}
-
 }
 
 void draw(pattern_t pattern, unsigned long time, bool trig){
 	uint16_t rgb[3];
-	rotation_guy_t * guy = NULL;
-	bool faster = false;
+	long interval = 0;
 
 	clear();
 
-	//on trig, reset position and color
 	if(trig){
-
+		//if we have a last time then we update the interval
+		//otherwise, we ignore the trigger
 		if (time_last != 0) {
-			long interval = (time - time_last);
-			light_guys_index = (light_guys_index + 1) % NUM_LIGHT_GUYS;
-			light_guys[light_guys_index].active = true;
-			light_guys[light_guys_index].position = random(NUM_LEDS);
-			light_guys[light_guys_index].position_mod = (float)NUM_LEDS / (float)(interval >> 4);
-			//light_guys[light_guys_index].position_mod = 0.05;
-			light_guys[light_guys_index].hv[0] = (float)random(256) / 256.0f;
-			light_guys[light_guys_index].hv[1] = 1.0;
-			light_guys[light_guys_index].fbdk[0] = (float)random(10) / 100000.0f;
-			light_guys[light_guys_index].fbdk[1] = 0.9f + (float)random(81) / 1024.0f;
-			//light_guys[light_guys_index].fbdk[0] = (float)random(10) / 10000.0f;
-			//light_guys[light_guys_index].fbdk[1] = 0.9f + (float)random(81) / 1024.0f;
-			if (random(12) > 8) {
-				light_guys[light_guys_index].position_mod = 
-					-light_guys[light_guys_index].position_mod;
-			}
-
+			interval = (time - time_last);
+		} else {
+			trig = false;
 		}
-
 		time_last = time;
 	}
 
-	//for now just do light guy
-	for(unsigned int i = 0; i < NUM_LIGHT_GUYS; i++) {
-		if(!light_guys[light_guys_index].active)
-			continue;
-		//increment the position
-		light_guys[i].position += light_guys[i].position_mod;
-		//stay in range
-		while (light_guys[i].position >= NUM_LEDS)
-			light_guys[i].position -= NUM_LEDS;
-		while (light_guys[i].position < 0)
-			light_guys[i].position += NUM_LEDS;
-		//update per the feedback
-		for(uint8_t j = 0; j < NUM_LEDS; j++) {
-			//h and v only
-			//light_guys[i].draw_buffer[j][0] += light_guys[i].fbdk[0];
-			light_guys[i].draw_buffer[j][0] *= 0.98;
-			while (light_guys[i].draw_buffer[j][0] > 1.0f)
-				light_guys[i].draw_buffer[j][0] -= 1.0f;
-			light_guys[i].draw_buffer[j][1] *= light_guys[i].fbdk[1];
+	switch (pattern) {
+		case GUYS:
+			{
+				//on trig, reset position and color
+				if (trig) {
+					light_guys_index = (light_guys_index + 1) % NUM_LIGHT_GUYS;
+					light_guys[light_guys_index].active = true;
+					light_guys[light_guys_index].position = random(NUM_LEDS);
+					light_guys[light_guys_index].position_mod = (float)NUM_LEDS / (float)(interval >> 4);
+					//light_guys[light_guys_index].position_mod = 0.05;
+					light_guys[light_guys_index].hv[0] = (float)random(256) / 256.0f;
+					light_guys[light_guys_index].hv[1] = 1.0;
+					light_guys[light_guys_index].fbdk[0] = (float)random(10) / 100000.0f;
+					light_guys[light_guys_index].fbdk[1] = 0.9f + (float)random(81) / 1024.0f;
+					//light_guys[light_guys_index].fbdk[0] = (float)random(10) / 10000.0f;
+					//light_guys[light_guys_index].fbdk[1] = 0.9f + (float)random(81) / 1024.0f;
+					if (random(12) > 8) {
+						light_guys[light_guys_index].position_mod = 
+							-light_guys[light_guys_index].position_mod;
+					}
+				}
 
-			//set a threshold where the color and hue no longer have effect
-			if(light_guys[i].draw_buffer[j][1] < 0.001f) {
-				light_guys[i].draw_buffer[j][1] = 0.0f;
-				light_guys[i].draw_buffer[j][0] = 0.0f;
+
+				//for now just do light guy
+				for(unsigned int i = 0; i < NUM_LIGHT_GUYS; i++) {
+					if(!light_guys[light_guys_index].active)
+						continue;
+					//increment the position
+					light_guys[i].position += light_guys[i].position_mod;
+					//stay in range
+					while (light_guys[i].position >= NUM_LEDS)
+						light_guys[i].position -= NUM_LEDS;
+					while (light_guys[i].position < 0)
+						light_guys[i].position += NUM_LEDS;
+					//update per the feedback
+					for(uint8_t j = 0; j < NUM_LEDS; j++) {
+						//h and v only
+						//light_guys[i].draw_buffer[j][0] += light_guys[i].fbdk[0];
+						light_guys[i].draw_buffer[j][0] *= 0.98;
+						while (light_guys[i].draw_buffer[j][0] > 1.0f)
+							light_guys[i].draw_buffer[j][0] -= 1.0f;
+						light_guys[i].draw_buffer[j][1] *= light_guys[i].fbdk[1];
+
+						//set a threshold where the color and hue no longer have effect
+						if(light_guys[i].draw_buffer[j][1] < 0.001f) {
+							light_guys[i].draw_buffer[j][1] = 0.0f;
+							light_guys[i].draw_buffer[j][0] = 0.0f;
+						}
+					}
+
+					//interpolate the new position lighting
+					unsigned int p = light_guys[i].position;
+					float res = light_guys[i].position - (float)p;
+					if(res == 0.0f) {
+						//draw the new guy
+						light_guys[i].draw_buffer[p][0] = light_guys[i].hv[0];
+						light_guys[i].draw_buffer[p][1] = light_guys[i].hv[1];
+					} else {
+						//find our next draw point
+						unsigned int p2 = p + 1;
+						if (p2 >= NUM_LEDS)
+							p2 = 0;
+
+						if (light_guys[i].position_mod >= 0) {
+							res = sin(res * 1.57 + 4.71) + 1.0f;
+							//hue stays the same
+							light_guys[i].draw_buffer[p2][0] = light_guys[i].hv[0];
+							//interpolate value
+							light_guys[i].draw_buffer[p2][1] = light_guys[i].hv[1] * res * res;
+						} else {
+							float res_inv = 1.0f - res;
+							res_inv = sin(res_inv * 1.57 + 4.71) + 1.0f;
+							light_guys[i].draw_buffer[p][0] = light_guys[i].hv[0];
+							//interpolate value
+							light_guys[i].draw_buffer[p][1] = light_guys[i].hv[1] * res_inv * res_inv;
+						}
+					}
+				}
+
+				for(uint8_t i = 0; i < NUM_LEDS; i++){
+					hsv[1] = 1.0f;
+					for(unsigned int j = 0; j < NUM_LIGHT_GUYS; j++) {
+						hsv[0] = light_guys[j].draw_buffer[i][0];
+						//we want the fade to be smooth, 
+						//we use the v value as the point along a sin
+						hsv[2] = sin(light_guys[j].draw_buffer[i][1] * 1.57 + 4.71) + 1.0f;
+						hsv2rgb(hsv, rgb);
+						for(uint8_t k = 0; k < 3; k++) {
+							LEDChannels[i][k] += rgb[k];
+							if (LEDChannels[i][k] > 0x3ff)
+								LEDChannels[i][k] = 0x3ff;
+						}
+					}
+
+				}
 			}
-		}
-
-		//interpolate the new position lighting
-		unsigned int p = light_guys[i].position;
-		float res = light_guys[i].position - (float)p;
-		if(res == 0.0f) {
-			//draw the new guy
-			light_guys[i].draw_buffer[p][0] = light_guys[i].hv[0];
-			light_guys[i].draw_buffer[p][1] = light_guys[i].hv[1];
-		} else {
-			//find our next draw point
-			unsigned int p2 = p + 1;
-			if (p2 >= NUM_LEDS)
-				p2 = 0;
-			res = sin(res * 1.57 + 4.71) + 1.0f;
-
-			if (light_guys[i].position_mod >= 0) {
-				//hue stays the same
-				light_guys[i].draw_buffer[p2][0] = light_guys[i].hv[0];
-				//interpolate value
-				light_guys[i].draw_buffer[p2][1] = light_guys[i].hv[1] * res * res;
-			} else {
-				float res_inv = 1.0f - res;
-				res_inv = sin(res_inv * 1.57 + 4.71) + 1.0f;
-				light_guys[i].draw_buffer[p][0] = light_guys[i].hv[0];
-				//interpolate value
-				light_guys[i].draw_buffer[p][1] = light_guys[i].hv[1] * res_inv * res_inv;
-			}
-
-			//we only draw the fade in value, otherwise we mess with our smoothed fade out
-#if 0
-			float res_inv = 1.0f - res;
-			res_inv = sin(res_inv * 1.57 + 4.71) + 1.0f;
-			light_guys[i].draw_buffer[p][0] = light_guys[i].hv[0];
-			//for our current position we increment the value that already existed there
-			light_guys[i].draw_buffer[p][1] += light_guys[i].hv[1] * res_inv * res_inv;
-#endif
-
-		}
+			break;
+		case NONE:
+		default:
+			clear();
+			break;
 	}
-
-	for(uint8_t i = 0; i < NUM_LEDS; i++){
-#if 0
-		//if (i == 12) {
-			//hsv[0] = light_guys[0].hv[0];
-			//hsv[1] = 1.0;
-			//hsv[2] = light_guys[0].hv[1];
-		//} else {
-		hsv[0] = 0.0f;
-		hsv[1] = 1.0f;
-		hsv[2] = 0.0f;
-
-		for(unsigned int j = 0; j < NUM_LIGHT_GUYS; j++) {
-			hsv[0] += light_guys[j].draw_buffer[i][0];
-			hsv[2] += light_guys[j].draw_buffer[i][1];
-		}
-
-		//}
-		//hsv[0] = light_guys[0].hv[0];
-		//hsv[1] = 1.0;
-		//hsv[2] = light_guys[0].hv[1];
-		hsv2rgb(hsv, rgb);
-#endif
-		hsv[1] = 1.0f;
-		for(unsigned int j = 0; j < NUM_LIGHT_GUYS; j++) {
-			hsv[0] = light_guys[j].draw_buffer[i][0];
-			//we want the fade to be smooth, 
-			//we use the v value as the point along a sin
-			hsv[2] = sin(light_guys[j].draw_buffer[i][1] * 1.57 + 4.71) + 1.0f;
-			hsv2rgb(hsv, rgb);
-			for(uint8_t k = 0; k < 3; k++) {
-				LEDChannels[i][k] += rgb[k];
-				if (LEDChannels[i][k] > 0x3ff)
-					LEDChannels[i][k] = 0x3ff;
-			}
-		}
-
-	}
-
 
 #if 0
 	switch(pattern){
