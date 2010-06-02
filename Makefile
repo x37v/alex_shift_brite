@@ -173,8 +173,6 @@ applet/$(TARGET).cpp: $(TARGET).pde
 	echo 'void setup();' >> applet/$(TARGET).cpp
 	echo 'void loop();' >> applet/$(TARGET).cpp
 	cat $(TARGET).pde >> applet/$(TARGET).cpp
-	echo 'int main(void) {\n init();\n setup();\n for (;;) loop();\n return 0;\n}\n' >> build/$(TARGET).cpp 
-
 
 elf: applet/$(TARGET).elf
 hex: applet/$(TARGET).hex

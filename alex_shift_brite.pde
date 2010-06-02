@@ -94,6 +94,7 @@ typedef struct _light_guy_data_t {
 	bool active;
 	unsigned int length;
 	float position;
+	float position_mod;
 	float hv[2];
 	// fbdk is hue and value
 	float fbdk[2];
@@ -101,9 +102,8 @@ typedef struct _light_guy_data_t {
 	float draw_buffer[NUM_LEDS][2];
 } light_guy_data_t;
 
-#define NUM_LIGHT_GUYS 2
+#define NUM_LIGHT_GUYS 3
 light_guy_data_t light_guys[NUM_LIGHT_GUYS];
-float global_hsv[NUM_LEDS][3];
 uint8_t light_guys_index;
 
 
@@ -124,7 +124,6 @@ void clear() {
 	for(uint8_t i = 0; i < NUM_LEDS; i++){
 		for(uint8_t j = 0; j < 3; j++) {
 			LEDChannels[i][j] = 0;
-			global_hsv[i][j] = 0.0;
 		}
 	}
 }
@@ -267,17 +266,21 @@ void setup() {
 	light_guys_index = 0;
 	for (unsigned int i = 0; i < NUM_LIGHT_GUYS; i++) {
 		//init light_guys
-		light_guys[i].active = true;
+		light_guys[i].active = false;
 		light_guys[i].position = random(NUM_LEDS) % NUM_LEDS;
+		light_guys[i].position_mod = 0.0;
 		light_guys[i].hv[0] = (float)random(256) / 256.0f;
 		light_guys[i].hv[1] = 1.0f;
 		light_guys[i].fbdk[0] = 0.0f;
+		light_guys[i].fbdk[1] = 0.96f;
+		/*
 		if (i == 0) {
 			light_guys[i].fbdk[1] = 0.98f;
 			light_guys[i].fbdk[0] = 0.002f;
 		} else {
 			light_guys[i].fbdk[1] = 0.96f;
 		}
+		*/
 		for(unsigned int j = 0; j < NUM_LEDS; j++) {
 			light_guys[i].draw_buffer[j][0] = 0.0;
 			light_guys[i].draw_buffer[j][1] = 0.0;
@@ -295,25 +298,41 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 
 	//on trig, reset position and color
 	if(trig){
-		light_guys_index = (light_guys_index + 1) % NUM_LIGHT_GUYS;
-		light_guys[light_guys_index].position = random(NUM_LEDS);
-		light_guys[light_guys_index].hv[0] = (float)random(256) / 256.0f;
-		light_guys[light_guys_index].hv[1] = 1.0;
-		light_guys[light_guys_index].fbdk[0] = (float)random(10) / 10000.0f;
-		light_guys[light_guys_index].fbdk[1] = 0.9f + (float)random(81) / 1024.0f;
+
+		if (time_last != 0) {
+			long interval = (time - time_last);
+			light_guys_index = (light_guys_index + 1) % NUM_LIGHT_GUYS;
+			light_guys[light_guys_index].active = true;
+			light_guys[light_guys_index].position = random(NUM_LEDS);
+			light_guys[light_guys_index].position_mod = (float)NUM_LEDS / (float)(interval >> 4);
+			//light_guys[light_guys_index].position_mod = 0.05;
+			light_guys[light_guys_index].hv[0] = (float)random(256) / 256.0f;
+			light_guys[light_guys_index].hv[1] = 1.0;
+			light_guys[light_guys_index].fbdk[0] = (float)random(10) / 100000.0f;
+			light_guys[light_guys_index].fbdk[1] = 0.9f + (float)random(81) / 1024.0f;
+			//light_guys[light_guys_index].fbdk[0] = (float)random(10) / 10000.0f;
+			//light_guys[light_guys_index].fbdk[1] = 0.9f + (float)random(81) / 1024.0f;
+			if (random(12) > 8) {
+				light_guys[light_guys_index].position_mod = 
+					-light_guys[light_guys_index].position_mod;
+			}
+
+		}
+
+		time_last = time;
 	}
 
 	//for now just do light guy
 	for(unsigned int i = 0; i < NUM_LIGHT_GUYS; i++) {
+		if(!light_guys[light_guys_index].active)
+			continue;
 		//increment the position
-		if (i == 0) {
-			light_guys[i].position += 0.1;
-		} else {
-			light_guys[i].position += 0.12;
-		}
+		light_guys[i].position += light_guys[i].position_mod;
 		//stay in range
 		while (light_guys[i].position >= NUM_LEDS)
 			light_guys[i].position -= NUM_LEDS;
+		while (light_guys[i].position < 0)
+			light_guys[i].position += NUM_LEDS;
 		//update per the feedback
 		for(uint8_t j = 0; j < NUM_LEDS; j++) {
 			//h and v only
@@ -344,10 +363,18 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 				p2 = 0;
 			res = sin(res * 1.57 + 4.71) + 1.0f;
 
-			//hue stays the same
-			light_guys[i].draw_buffer[p2][0] = light_guys[i].hv[0];
-			//interpolate value
-			light_guys[i].draw_buffer[p2][1] = light_guys[i].hv[1] * res * res;
+			if (light_guys[i].position_mod >= 0) {
+				//hue stays the same
+				light_guys[i].draw_buffer[p2][0] = light_guys[i].hv[0];
+				//interpolate value
+				light_guys[i].draw_buffer[p2][1] = light_guys[i].hv[1] * res * res;
+			} else {
+				float res_inv = 1.0f - res;
+				res_inv = sin(res_inv * 1.57 + 4.71) + 1.0f;
+				light_guys[i].draw_buffer[p][0] = light_guys[i].hv[0];
+				//interpolate value
+				light_guys[i].draw_buffer[p][1] = light_guys[i].hv[1] * res_inv * res_inv;
+			}
 
 			//we only draw the fade in value, otherwise we mess with our smoothed fade out
 #if 0
