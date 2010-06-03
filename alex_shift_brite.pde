@@ -125,8 +125,8 @@ light_guy_data_t light_guys[NUM_LIGHT_GUYS];
 uint8_t light_guys_index;
 
 
-uint8_t mode_wipe_ends[] = { 24, 12, 8, 6, 4, 3, 2, 1};
-#define MODE_WIPE_PATTERN_LEN 8
+uint8_t mode_wipe_ends[] = { 24, 12, 8, 6, 4, 3, 2};
+#define MODE_WIPE_PATTERN_LEN 7
 
 uint8_t but_hist;
 uint8_t hist;
@@ -502,8 +502,13 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 					//update per mode [light_guys_index]
 					//the 0th time we want it to go around in one beat, the 1st we draw
 					//half the amount so we divide the position_mod by 2.. ..
-					light_guys[0].position_mod = (float)NUM_LEDS / 
-						(float)(interval * (((light_guys_index % MODE_WIPE_PATTERN_LEN) + 1)));
+					if ( light_guys_index < MODE_WIPE_PATTERN_LEN) {
+						light_guys[0].position_mod = (float)NUM_LEDS / 
+							(float)(interval * ((light_guys_index % MODE_WIPE_PATTERN_LEN) + 1));
+					} else {
+						light_guys[0].position_mod = (float)NUM_LEDS / 
+							(float)(interval * (MODE_WIPE_PATTERN_LEN - (light_guys_index % MODE_WIPE_PATTERN_LEN)));
+					}
 				}
 			}
 
