@@ -125,7 +125,7 @@ light_guy_data_t light_guys[NUM_LIGHT_GUYS];
 uint8_t light_guys_index;
 
 
-uint8_t mode_wipe_ends[] = { 24, 12, 8, 6, 4, 3, 2, 1 };
+uint8_t mode_wipe_ends[] = { 24, 12, 8, 6, 4, 3, 2, 1};
 #define MODE_WIPE_PATTERN_LEN 8
 
 uint8_t but_hist;
@@ -504,12 +504,6 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 					//half the amount so we divide the position_mod by 2.. ..
 					light_guys[0].position_mod = (float)NUM_LEDS / 
 						(float)(interval * (((light_guys_index % MODE_WIPE_PATTERN_LEN) + 1)));
-
-					//XXX just for now reset the draw buffer
-					for(uint8_t j = 0; j < NUM_LEDS; j++) {
-						light_guys[0].draw_buffer[j][0] = 0.0;
-						light_guys[0].draw_buffer[j][1] = 0.0;
-					}
 				}
 			}
 
@@ -517,18 +511,41 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 			if (!light_guys[0].active)
 				break;
 
-			//stay in bounds, we wrap in pattern
-			if ((uint8_t)light_guys[0].position
-					>= mode_wipe_ends[light_guys_index % MODE_WIPE_PATTERN_LEN]) {
-				light_guys[0].active = false;
+			//go fowards down the list first, then backwards
+			if (light_guys_index < MODE_WIPE_PATTERN_LEN) {
+				//stay in bounds, we wrap in pattern
+				if ((uint8_t)light_guys[0].position
+						>= mode_wipe_ends[light_guys_index % MODE_WIPE_PATTERN_LEN]) {
+					light_guys[0].active = false;
+				}
+			} else {
+				//stay in bounds, we wrap in pattern
+				if ((uint8_t)light_guys[0].position
+						>= mode_wipe_ends[MODE_WIPE_PATTERN_LEN - 1 - (light_guys_index % MODE_WIPE_PATTERN_LEN)]) {
+					light_guys[0].active = false;
+				}
 			}
-			draw_light_guy(&light_guys[0]);
+
+			//every other time we erase
+			if (light_guys_index % 2 == 0) {
+				draw_light_guy(&light_guys[0]);
+			} else {
+				light_guys[0].draw_buffer[(uint8_t)light_guys[0].position % NUM_LEDS][0] = 0.0;
+				light_guys[0].draw_buffer[(uint8_t)light_guys[0].position % NUM_LEDS][1] = 0.0;
+			}
+
+			//update our position
 			light_guys[0].position_last = light_guys[0].position;
 			light_guys[0].position += ((float)(time - draw_time_last) * light_guys[0].position_mod);
 
 			//mirror, only if we're not at the first position in the pattern
 			if (light_guys_index % MODE_WIPE_PATTERN_LEN != 0) {
-				const uint8_t mirror_len = mode_wipe_ends[light_guys_index % MODE_WIPE_PATTERN_LEN];
+				uint8_t mirror_len;
+				if (light_guys_index < MODE_WIPE_PATTERN_LEN) {
+					mirror_len = mode_wipe_ends[light_guys_index % MODE_WIPE_PATTERN_LEN];
+				} else {
+					mirror_len = mode_wipe_ends[MODE_WIPE_PATTERN_LEN - 1 - (light_guys_index % MODE_WIPE_PATTERN_LEN)];
+				}
 				uint8_t start_index = mirror_len;
 				while(start_index < NUM_LEDS && (start_index + mirror_len) <= NUM_LEDS) {
 					for(uint8_t i = 0; i < mirror_len; i++){
