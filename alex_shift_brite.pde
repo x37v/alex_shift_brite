@@ -1,10 +1,19 @@
 #define clockpin 13 // CI
 #define datapin 11 // DI
+#define enablepin 14 // EI
+#define latchpin 10 // LI
+
+/*
+#define clockpin 13 // CI
+#define datapin 11 // DI
 #define enablepin 10 // EI
 #define latchpin 9 // LI
+*/
 
-#define PATTERN_SEL_PIN 3
-#define PATTERN_SEL_GND 4
+//#define PATTERN_SEL_PIN 3
+//#define PATTERN_SEL_GND 4
+
+#define PATTERN_SEL_PIN 17
 
 #define ANALOG_TRIGGER_PIN 0
 //15 == analog 1
@@ -12,6 +21,7 @@
 
 #include "hsvrgb.h"
 #include "math.h"
+#include <avr/pgmspace.h>
 
 #define NUM_LEDS 24
 
@@ -111,9 +121,14 @@ light_guy_data_t light_guys[NUM_LIGHT_GUYS];
 uint8_t light_guys_index;
 
 
+PROGMEM uint8_t mode_wipe_ends[] = { 24, 12, 8, 6, 4, 3, 2, 1 };
+#define MODE_WIPE_PATTERN_LEN 8
+
 uint8_t but_hist;
 uint8_t hist;
 bool down;
+unsigned long draw_time_last;
+unsigned long trigger_last;
 
 int LEDChannels[NUM_LEDS][3];
 int SB_CommandMode;
@@ -122,7 +137,7 @@ int SB_GreenCommand;
 int SB_BlueCommand;
 
 //volatile unsigned long global_interval;
-volatile unsigned long time_last;
+//volatile unsigned long time_last;
 
 void clear() {
 	for(uint8_t i = 0; i < NUM_LEDS; i++){
@@ -178,27 +193,34 @@ void WriteLEDArray() {
 void set_pattern(pattern_t new_pat){
 	
 	led_pattern = new_pat;
+
+	//the last time we've drawn, reset
+	draw_time_last = 0;
+	trigger_last = 0;
+
 	//do all the set up we need
+	clear();
+	//init light_guys
+	light_guys_index = 0;
+	for (unsigned int i = 0; i < NUM_LIGHT_GUYS; i++) {
+		light_guys[i].active = false;
+		light_guys[i].position = random(NUM_LEDS) % NUM_LEDS;
+		light_guys[i].position_mod = 0.0;
+		light_guys[i].hv[0] = (float)random(256) / 256.0f;
+		light_guys[i].hv[1] = 1.0f;
+		light_guys[i].fbdk[0] = 0.0f;
+		light_guys[i].fbdk[1] = 0.96f;
+		//reset the draw buffer
+		for(unsigned int j = 0; j < NUM_LEDS; j++) {
+			light_guys[i].draw_buffer[j][0] = 0.0;
+			light_guys[i].draw_buffer[j][1] = 0.0;
+		}
+	}
 	switch(led_pattern) {
-		case GUYS:
 		case MODE_WIPE:
-			clear();
-			light_guys_index = 0;
-			//init light_guys
-			for (unsigned int i = 0; i < NUM_LIGHT_GUYS; i++) {
-				light_guys[i].active = false;
-				light_guys[i].position = random(NUM_LEDS) % NUM_LEDS;
-				light_guys[i].position_mod = 0.0;
-				light_guys[i].hv[0] = (float)random(256) / 256.0f;
-				light_guys[i].hv[1] = 1.0f;
-				light_guys[i].fbdk[0] = 0.0f;
-				light_guys[i].fbdk[1] = 0.96f;
-				//reset the draw buffer
-				for(unsigned int j = 0; j < NUM_LEDS; j++) {
-					light_guys[i].draw_buffer[j][0] = 0.0;
-					light_guys[i].draw_buffer[j][1] = 0.0;
-				}
-			}
+			//on the first go we want to be at the last valid index so we start
+			//on the first trigger at 0
+			light_guys_index = (MODE_WIPE_PATTERN_LEN << 1) - 1;
 			break;
 		default:
 			break;
@@ -276,8 +298,8 @@ void setup() {
    digitalWrite(enablepin, LOW);
 
 	//set the trigger ground to be an output, set it to zero
-	pinMode(PATTERN_SEL_GND, OUTPUT);
-	digitalWrite(PATTERN_SEL_GND, LOW);
+	//pinMode(PATTERN_SEL_GND, OUTPUT);
+	//digitalWrite(PATTERN_SEL_GND, LOW);
 
 	//set the analog trigger to be an output and set to zero
 	pinMode(ANALOG_PATTERN_SEL_GND, OUTPUT);
@@ -285,25 +307,25 @@ void setup() {
 
 	//set the trigger pin to be an input, with pullup
 	pinMode(PATTERN_SEL_PIN, INPUT);
-	DDRD &= ~(1 << PATTERN_SEL_PIN);
-	PORTD |= (1 << PATTERN_SEL_PIN);
+	digitalWrite(PATTERN_SEL_PIN, HIGH);
 
 	clear();
 	delay(10);
 	WriteLEDArray();
 
 	//global_interval = 0;
-	time_last = 0;
+	//time_last = 0;
 
 }
 
-void draw_light_guy(light_guy_data_t * guy) {
+//pass the guy and its last position
+void draw_light_guy(light_guy_data_t * guy, float position_last) {
 
 	//update per the feedback
 	for(uint8_t j = 0; j < NUM_LEDS; j++) {
 		//h and v only
-		//guy->draw_buffer[j][0] += guy->fbdk[0];
-		guy->draw_buffer[j][0] *= 0.98;
+		guy->draw_buffer[j][0] += guy->fbdk[0];
+		//guy->draw_buffer[j][0] *= 0.98;
 		while (guy->draw_buffer[j][0] > 1.0f)
 			guy->draw_buffer[j][0] -= 1.0f;
 		guy->draw_buffer[j][1] *= guy->fbdk[1];
@@ -314,6 +336,8 @@ void draw_light_guy(light_guy_data_t * guy) {
 			guy->draw_buffer[j][0] = 0.0f;
 		}
 	}
+
+	//TODO deal with position_last
 
 	//interpolate the new position lighting
 	unsigned int p = guy->position;
@@ -349,29 +373,37 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 	uint16_t rgb[3];
 	long interval = 0;
 
-	clear();
+	//we don't draw the first time around
+	if (draw_time_last == 0) {
+		draw_time_last = time;
+		return;
+	}
 
 	if(trig){
 		//increment the trigger count
 		trigger_count++;
 		//if we have a last time then we update the interval
 		//otherwise, we ignore the trigger
-		if (time_last != 0) {
-			interval = (time - time_last);
+		if (trigger_last != 0) {
+			interval = (time - trigger_last);
 		} else {
 			trig = false;
 		}
-		time_last = time;
+		trigger_last = time;
 	}
+
+	float position_last = 0;
 
 	switch (pattern) {
 		case GUYS:
+			clear();
 			//on trig, reset position and color
-			if (trig && (trigger_count % 4) == 0) {
+			if (trig && (trigger_count % 2) == 0) {
 				light_guys_index = (light_guys_index + 1) % NUM_LIGHT_GUYS;
 				light_guys[light_guys_index].active = true;
 				light_guys[light_guys_index].position = random(NUM_LEDS);
-				light_guys[light_guys_index].position_mod = (float)(NUM_LEDS << 4) / (float)interval;
+				//position mod is per millisecond
+				light_guys[light_guys_index].position_mod = (float)NUM_LEDS / (float)interval;
 				//light_guys[light_guys_index].position_mod = 0.05;
 				light_guys[light_guys_index].hv[0] = (float)random(256) / 256.0f;
 				light_guys[light_guys_index].hv[1] = 1.0;
@@ -391,14 +423,16 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 				if(!light_guys[light_guys_index].active)
 					continue;
 				//increment the position
-				light_guys[i].position += light_guys[i].position_mod;
+				position_last = light_guys[i].position;
+				light_guys[i].position += ((float)(time - draw_time_last) * light_guys[i].position_mod);
+				//light_guys[i].position += light_guys[i].position_mod;
 				//stay in range
 				while (light_guys[i].position >= NUM_LEDS)
 					light_guys[i].position -= NUM_LEDS;
 				while (light_guys[i].position < 0)
 					light_guys[i].position += NUM_LEDS;
 
-				draw_light_guy(&light_guys[i]);
+				draw_light_guy(&light_guys[i], position_last);
 			}
 
 			for(uint8_t i = 0; i < NUM_LEDS; i++){
@@ -420,45 +454,60 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 			break;
 		case MODE_WIPE:
 			if (trig) {
+				//increment our index
+				light_guys_index = (light_guys_index + 1) % (MODE_WIPE_PATTERN_LEN << 1);
+
 				light_guys[0].active = true;
-				light_guys[0].position = random(NUM_LEDS);
+				//always start at zero
+				light_guys[0].position = 0;
 				//XXX figure out this:
-				light_guys[0].hv[0] += 0.11;
+				light_guys[0].hv[0] += 0.111;
 				while(light_guys[0].hv[0] >= 1.0)
 					light_guys[0].hv[0] -= 1.0;
 				light_guys[0].hv[1] = 1.0;
 				light_guys[0].fbdk[0] = 1.0;
 				//XXX figure out this:
-				light_guys[0].fbdk[1] = 0.98;
+				light_guys[0].fbdk[1] = 1.0;
 
 				//update per mode [light_guys_index]
-				light_guys[0].position_mod = (float)NUM_LEDS / (float)(interval >> 4);
+				//the 0th time we want it to go around in one beat, the 1st we draw
+				//half the amount so we divide the position_mod by 2.. ..
+				light_guys[light_guys_index].position_mod = (float)NUM_LEDS / (float)interval;
+				//light_guys[0].position_mod = (float)NUM_LEDS / 
+					//(float)(interval * (((light_guys_index % MODE_WIPE_PATTERN_LEN) + 1)));
 			}
 
-			light_guys[0].position += light_guys[0].position;
-			{
-				uint8_t p = light_guys[0].position;
-				switch(light_guys_index) {
-					case 0:
-						if (p >= 24)
-							light_guys[0].active = false;
-						break;
-					case 1:
-						if (p >= 12)
-							light_guys[0].active = false;
-						break;
-					case 2:
-						if (p >= 8)
-							light_guys[0].active = false;
-						break;
-					default:
-						break;
-				}
-			}
 			//if the guy isn't active then we break
 			if (!light_guys[0].active)
 				break;
-			draw_light_guy(&light_guys[0]);
+
+			position_last = light_guys[0].position;
+			light_guys[0].position += ((float)(time - draw_time_last) * light_guys[0].position_mod);
+			{
+				uint8_t p = (uint8_t)light_guys[0].position;
+
+				//stay in bounds, we wrap in pattern
+				if (p >= mode_wipe_ends[light_guys_index % MODE_WIPE_PATTERN_LEN])
+					light_guys[0].active = false;
+			}
+			draw_light_guy(&light_guys[0], position_last);
+
+			/*
+			//mirror, only if we're not at the first position in the pattern
+			if (light_guys_index % MODE_WIPE_PATTERN_LEN != 0) {
+				const uint8_t mirror_len = mode_wipe_ends[light_guys_index % MODE_WIPE_PATTERN_LEN];
+				uint8_t start_index = mirror_len;
+				while(start_index < NUM_LEDS && (start_index + mirror_len) <= NUM_LEDS) {
+					for(uint8_t i = 0; i < mirror_len; i++){
+						light_guys[0].draw_buffer[i + start_index][0] =
+							light_guys[0].draw_buffer[i][0];
+						light_guys[0].draw_buffer[i + start_index][1] =
+							light_guys[0].draw_buffer[i][1];
+					}
+					start_index += mirror_len;
+				}
+			}
+			*/
 
 			//actually update the leds
 			for(uint8_t i = 0; i < NUM_LEDS; i++){
@@ -475,9 +524,6 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 				}
 			}
 
-			//update the index on trigger
-			if (trig)
-				light_guys_index = (light_guys_index + 1) % 3;
 			break;
 		case NONE:
 		default:
@@ -736,6 +782,8 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 #endif
 
 	WriteLEDArray();
+	//store the time
+	draw_time_last = time;
 }
 
 void loop() {
