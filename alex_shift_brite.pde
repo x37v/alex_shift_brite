@@ -420,7 +420,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 				//usually we want to go half as fast, which means we need to move
 				//twice as far in the interval, every once in a while we let it go at normal rate
 				if (random(8) > 1) {
-					light_guys[light_guys_index].position_mod *= 2;
+					light_guys[light_guys_index].position_mod *= 0.5;
 				} 
 				//light_guys[light_guys_index].position_mod = 0.05;
 				light_guys[light_guys_index].hv[0] = (float)random(256) / 256.0f;
