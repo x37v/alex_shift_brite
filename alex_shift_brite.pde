@@ -30,6 +30,7 @@
 #define SEVEN_SEG_P 9
 
 #define NUM_LEDS 24
+#define HALF_NUM_LEDS 12
 
 #define ANALOG_THRES 1000
 #define TRIGGER_MIN_INTERVAL 200
@@ -44,6 +45,8 @@ typedef enum {
 	NONE = 0,
 	GUYS,
 	MODE_WIPE,
+	VERT_MIRROR,
+	FADE_IN,
 	//FADE,
 	//QUAD_ECHO,
 	//ROTATION,
@@ -364,6 +367,8 @@ void setup() {
 	//init the pattern
 	set_pattern(GUYS);
 	set_pattern(MODE_WIPE);
+	set_pattern(FADE_IN);
+	set_pattern(VERT_MIRROR);
 }
 
 void set_display(uint8_t val) {
@@ -783,6 +788,71 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 				}
 			}
 			break;
+		case VERT_MIRROR:
+			if (trig) {
+				light_guys[0].active = true;
+				light_guys[0].position_mod = 0.5f * (float)HALF_NUM_LEDS / 
+					(float)(interval);
+				light_guys[0].position = 0;
+				//every other time we change the direction
+				if (trigger_count % 2) {
+					light_guys[0].position = HALF_NUM_LEDS - 1;
+					light_guys[0].position_mod = -light_guys[0].position_mod;
+				}
+				light_guys[0].position_last = light_guys[0].position;
+
+				//figure out the correct hue increment
+				light_guys[0].hv[0] += 0.211111;
+				while(light_guys[0].hv[0] >= 1.0)
+					light_guys[0].hv[0] -= 1.0;
+				light_guys[0].hv[1] = 1.0;
+
+				//XXX figure out this:
+				light_guys[0].fbdk_type = ADD;
+				light_guys[0].fbdk[0] = 0.001;
+				light_guys[0].fbdk[1] = 0.96;
+			}
+
+			if (!light_guys[0].active)
+				break;
+			//draw then increment position
+			draw_light_guy(&light_guys[0], true);
+			light_guys[0].position_last = light_guys[0].position;
+			light_guys[0].position += ((float)(time - draw_time_last) * light_guys[0].position_mod);
+
+			if (light_guys[0].position < 0) {
+				light_guys[0].position = 0;
+				light_guys[0].active = false;
+			} else if (light_guys[0].position > HALF_NUM_LEDS - 1) {
+				light_guys[0].position = HALF_NUM_LEDS - 1;
+				light_guys[0].active = false;
+			}
+
+			//mirror
+			for(uint8_t i = 0; i < HALF_NUM_LEDS; i++){
+				light_guys[0].draw_buffer[NUM_LEDS - 1 - i][0] =
+					light_guys[0].draw_buffer[i][0];
+				light_guys[0].draw_buffer[NUM_LEDS - 1 - i][1] =
+					light_guys[0].draw_buffer[i][1];
+			}
+
+			//actually update the leds
+			for(uint8_t i = 0; i < NUM_LEDS; i++){
+				hsv[1] = 1.0f;
+				hsv[0] = light_guys[0].draw_buffer[i][0];
+				//we want the fade to be smooth, 
+				//we use the v value as the point along a sin
+				hsv[2] = sin(light_guys[0].draw_buffer[i][1] * 1.57 + 4.71) + 1.0f;
+				hsv2rgb(hsv, rgb);
+				for(uint8_t k = 0; k < 3; k++) {
+					//ASSIGNMENT, not addition!
+					LEDChannels[i][k] = rgb[k];
+					if (LEDChannels[i][k] > 0x3ff)
+						LEDChannels[i][k] = 0x3ff;
+				}
+			}
+
+			break;
 		case NONE:
 		default:
 			clear();
@@ -1045,7 +1115,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 }
 
 void loop() {
-	static pattern_t led_pattern = MODE_WIPE;
+	static pattern_t led_pattern = VERT_MIRROR;
 	static unsigned long trigger_next = 0;
 	static unsigned long trigger_last = 0;
 	unsigned long time = millis();
