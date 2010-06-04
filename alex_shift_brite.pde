@@ -133,8 +133,9 @@ light_guy_data_t light_guys[NUM_LIGHT_GUYS];
 uint8_t light_guys_index;
 
 
-uint8_t mode_wipe_ends[] = { 24, 12, 8, 6, 4, 3, 2};
-#define MODE_WIPE_PATTERN_LEN 7
+uint8_t mode_wipe_ends[] = { 24, 12, 8, 6, 4, 3, 2, 2, 3, 4, 6, 8, 12, 24};
+#define MODE_WIPE_PATTERN_LEN 14
+#define HALF_MODE_WIPE_LEN 7
 
 uint8_t but_hist;
 uint8_t hist;
@@ -244,7 +245,7 @@ void set_pattern(pattern_t new_pat){
 			//on the first go we want to be at the last valid index so we start
 			//on the first trigger at 0
 			//light_guys_index = (MODE_WIPE_PATTERN_LEN << 1) - 1;
-			light_guys_index = 0;
+			light_guys_index = MODE_WIPE_PATTERN_LEN - 1;
 			break;
 		default:
 			break;
@@ -357,8 +358,7 @@ void setup() {
 	WriteLEDArray();
 
 	//init the pattern
-	set_pattern(NONE);
-	set_pattern(MODE_WIPE);
+	set_pattern(GUYS);
 }
 
 void set_display(uint8_t val) {
@@ -647,7 +647,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 			if (trig) {
 				if (trigger_count % 2 == 0) {
 					//increment our index
-					light_guys_index = (light_guys_index + 1) % (MODE_WIPE_PATTERN_LEN << 1);
+					light_guys_index = (light_guys_index + 1) % MODE_WIPE_PATTERN_LEN;
 
 					light_guys[0].active = true;
 					//always start at zero
@@ -668,12 +668,12 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 					//update per mode [light_guys_index]
 					//the 0th time we want it to go around in one beat, the 1st we draw
 					//half the amount so we divide the position_mod by 2.. ..
-					if ( light_guys_index < MODE_WIPE_PATTERN_LEN) {
+					if ( light_guys_index < HALF_MODE_WIPE_LEN) {
 						light_guys[0].position_mod = (float)NUM_LEDS / 
-							(float)(interval * ((light_guys_index % MODE_WIPE_PATTERN_LEN) + 1));
+							(float)(interval * (light_guys_index + 1));
 					} else {
 						light_guys[0].position_mod = (float)NUM_LEDS / 
-							(float)(interval * (MODE_WIPE_PATTERN_LEN - (light_guys_index % MODE_WIPE_PATTERN_LEN)));
+							(float)(interval * (MODE_WIPE_PATTERN_LEN - light_guys_index));
 					}
 				}
 			}
@@ -682,19 +682,11 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 			if (!light_guys[0].active)
 				break;
 
-			//go fowards down the list first, then backwards
-			if (light_guys_index < MODE_WIPE_PATTERN_LEN) {
-				//stay in bounds, we wrap in pattern
-				if ((uint8_t)light_guys[0].position
-						>= mode_wipe_ends[light_guys_index % MODE_WIPE_PATTERN_LEN]) {
-					light_guys[0].active = false;
-				}
-			} else {
-				//stay in bounds, we wrap in pattern
-				if ((uint8_t)light_guys[0].position
-						>= mode_wipe_ends[MODE_WIPE_PATTERN_LEN - 1 - (light_guys_index % MODE_WIPE_PATTERN_LEN)]) {
-					light_guys[0].active = false;
-				}
+			//stay in bounds, we wrap in pattern
+			if (light_guys[0].position
+					>= mode_wipe_ends[light_guys_index % MODE_WIPE_PATTERN_LEN]){
+				light_guys[0].active = false;
+				break;
 			}
 
 			//every other time we erase
@@ -711,15 +703,10 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 			light_guys[0].position += ((float)(time - draw_time_last) * light_guys[0].position_mod);
 
 			//mirror, only if we're not at the first position in the pattern
-			if (light_guys_index % MODE_WIPE_PATTERN_LEN != 0) {
-				uint8_t mirror_len;
-				if (light_guys_index < MODE_WIPE_PATTERN_LEN) {
-					mirror_len = mode_wipe_ends[light_guys_index % MODE_WIPE_PATTERN_LEN];
-				} else {
-					mirror_len = mode_wipe_ends[MODE_WIPE_PATTERN_LEN - 1 - (light_guys_index % MODE_WIPE_PATTERN_LEN)];
-				}
+			if ((light_guys_index != 0) && (light_guys_index != (MODE_WIPE_PATTERN_LEN - 1))) {
+				const uint8_t mirror_len = mode_wipe_ends[light_guys_index % MODE_WIPE_PATTERN_LEN];
 				uint8_t start_index = mirror_len;
-				while(start_index < NUM_LEDS && (start_index + mirror_len) <= NUM_LEDS) {
+				while(start_index < NUM_LEDS) {
 					for(uint8_t i = 0; i < mirror_len; i++){
 						light_guys[0].draw_buffer[i + start_index][0] =
 							light_guys[0].draw_buffer[i][0];
@@ -745,7 +732,6 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 						LEDChannels[i][k] = 0x3ff;
 				}
 			}
-
 			break;
 		case NONE:
 		default:
@@ -1009,13 +995,12 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 }
 
 void loop() {
-	static pattern_t led_pattern = NONE;
+	static pattern_t led_pattern = MODE_WIPE;
 	static unsigned long trigger_next = 0;
 	static unsigned long trigger_last = 0;
 	unsigned long time = millis();
 	uint16_t analog_val = analogRead(ANALOG_TRIGGER_PIN);
 	bool trig = false;
-	static uint8_t butpush = 0;
 
 	//check for a trigger
 	if(digitalRead(PATTERN_SEL_PIN))
@@ -1031,11 +1016,13 @@ void loop() {
 		//down
 	} else if(but_hist == 0x00){
 		if(!down){
-			led_pattern = (pattern_t)((led_pattern + 1) % PATTERN_T_END);
-			set_pattern(led_pattern);
 			down = true;
 			////XXX temp! just using the button for trigger now
-			//trig = true;
+			//led_pattern = (pattern_t)((led_pattern + 1) % PATTERN_T_END);
+			//set_pattern(led_pattern);
+
+			trig = true;
+			digitalWrite(SEVEN_SEG_P, HIGH);
 		}
 	}
 
