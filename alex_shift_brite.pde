@@ -363,7 +363,7 @@ void setup() {
 
 	//init the pattern
 	set_pattern(GUYS);
-	//set_pattern(MODE_WIPE);
+	set_pattern(MODE_WIPE);
 }
 
 void set_display(uint8_t val) {
@@ -497,28 +497,30 @@ void set_display(uint8_t val) {
 }
 
 //pass the guy and its last position
-void draw_light_guy(light_guy_data_t * guy){
+void draw_light_guy(light_guy_data_t * guy, bool do_feedback = true){
 
 	//update per the feedback
-	for(uint8_t j = 0; j < NUM_LEDS; j++) {
-		//h and v only
-		//guy->draw_buffer[j][0] += guy->fbdk[0];
-		if(guy->fbdk_type == MULT)
-			guy->draw_buffer[j][0] *= guy->fbdk[0];
-		else
-			guy->draw_buffer[j][0] += guy->fbdk[0];
-		//guy->draw_buffer[j][0] *= 0.98;
-		while (guy->draw_buffer[j][0] > 1.0f)
-			guy->draw_buffer[j][0] -= 1.0f;
+	if (do_feedback) {
+		for(uint8_t j = 0; j < NUM_LEDS; j++) {
+			//h and v only
+			//guy->draw_buffer[j][0] += guy->fbdk[0];
+			if(guy->fbdk_type == MULT)
+				guy->draw_buffer[j][0] *= guy->fbdk[0];
+			else
+				guy->draw_buffer[j][0] += guy->fbdk[0];
+			//guy->draw_buffer[j][0] *= 0.98;
+			while (guy->draw_buffer[j][0] > 1.0f)
+				guy->draw_buffer[j][0] -= 1.0f;
 
-		guy->draw_buffer[j][1] *= guy->fbdk[1];
-		if (guy->draw_buffer[j][1] > 1.0f)
-			guy->draw_buffer[j][1] = 1.0;
+			guy->draw_buffer[j][1] *= guy->fbdk[1];
+			if (guy->draw_buffer[j][1] > 1.0f)
+				guy->draw_buffer[j][1] = 1.0;
 
-		//set a threshold where the color and hue no longer have effect
-		if(guy->draw_buffer[j][1] < 0.001f) {
-			guy->draw_buffer[j][1] = 0.0f;
-			guy->draw_buffer[j][0] = 0.0f;
+			//set a threshold where the color and hue no longer have effect
+			if(guy->draw_buffer[j][1] < 0.001f) {
+				guy->draw_buffer[j][1] = 0.0f;
+				guy->draw_buffer[j][0] = 0.0f;
+			}
 		}
 	}
 
@@ -542,18 +544,32 @@ void draw_light_guy(light_guy_data_t * guy){
 			//interpolate value
 			guy->draw_buffer[p2][1] = guy->hv[1] * res * res;
 
-			//draw inbetween values that may have been mist
+			//draw inbetween values that may have been missed
+			//TODO isn't correct if we cross zero
 			for(uint8_t i = (guy->position_last + 1); i < p2; i++){
 				guy->draw_buffer[i][0] = guy->hv[0];
 				//interpolate value
 				guy->draw_buffer[i][1] = guy->hv[1];
 			}
+			//TODO erase!
+
 		} else {
 			float res_inv = 1.0f - res;
 			res_inv = sin(res_inv * 1.57 + 4.71) + 1.0f;
 			guy->draw_buffer[p][0] = guy->hv[0];
-			//interpolate value
-			guy->draw_buffer[p][1] = guy->hv[1] * res_inv * res_inv;
+
+			//if we're erasing then we want to turn the last guy off
+			if (guy->hv[1] == 0.0f) {
+				//TODO interpolate erase
+				guy->draw_buffer[p][1] = 0.0f;
+				//erase the last guy
+				guy->draw_buffer[p2][0] = guy->hv[0];
+				guy->draw_buffer[p2][1] = 0.0f;
+			} else {
+				//interpolate value
+				guy->draw_buffer[p][1] = guy->hv[1] * res_inv * res_inv;
+			}
+
 			//TODO deal with position_last
 		}
 	}
@@ -686,11 +702,16 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 					}
 					light_guys[0].position_last = light_guys[0].position;
 
-					//XXX figure out this:
-					light_guys[0].hv[0] += 0.311111;
-					while(light_guys[0].hv[0] >= 1.0)
-						light_guys[0].hv[0] -= 1.0;
-					light_guys[0].hv[1] = 1.0;
+					//every other time we erase, we don't care about hue
+					if (light_guys_index % 2 == 0) {
+						//figure out the correct hue increment
+						light_guys[0].hv[0] += 0.111111;
+						while(light_guys[0].hv[0] >= 1.0)
+							light_guys[0].hv[0] -= 1.0;
+						light_guys[0].hv[1] = 1.0;
+					} else {
+						light_guys[0].hv[1] = 0.0;
+					}
 
 					//XXX figure out this:
 					light_guys[0].fbdk_type = ADD;
@@ -721,9 +742,10 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 			if (light_guys_index % 2 == 0) {
 				draw_light_guy(&light_guys[0]);
 			} else {
-				//XXX get inbetween guys
-				light_guys[0].draw_buffer[(uint8_t)light_guys[0].position % NUM_LEDS][0] = 0.0;
-				light_guys[0].draw_buffer[(uint8_t)light_guys[0].position % NUM_LEDS][1] = 0.0;
+				draw_light_guy(&light_guys[0], false);
+				////XXX get inbetween guys
+				//light_guys[0].draw_buffer[(uint8_t)light_guys[0].position % NUM_LEDS][0] = 0.0;
+				//light_guys[0].draw_buffer[(uint8_t)light_guys[0].position % NUM_LEDS][1] = 0.0;
 			}
 
 			//update our position
@@ -1023,7 +1045,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 }
 
 void loop() {
-	static pattern_t led_pattern = GUYS;
+	static pattern_t led_pattern = MODE_WIPE;
 	static unsigned long trigger_next = 0;
 	static unsigned long trigger_last = 0;
 	unsigned long time = millis();
