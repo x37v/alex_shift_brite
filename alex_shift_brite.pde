@@ -362,8 +362,8 @@ void setup() {
 	WriteLEDArray();
 
 	//init the pattern
-	//set_pattern(GUYS);
-	set_pattern(MODE_WIPE);
+	set_pattern(GUYS);
+	//set_pattern(MODE_WIPE);
 }
 
 void set_display(uint8_t val) {
@@ -522,10 +522,8 @@ void draw_light_guy(light_guy_data_t * guy){
 		}
 	}
 
-	//TODO deal with position_last
-
 	//interpolate the new position lighting
-	unsigned int p = guy->position;
+	uint8_t p = guy->position;
 	float res = guy->position - (float)p;
 	if(res == 0.0f) {
 		//draw the new guy
@@ -533,7 +531,7 @@ void draw_light_guy(light_guy_data_t * guy){
 		guy->draw_buffer[p][1] = guy->hv[1];
 	} else {
 		//find our next draw point
-		unsigned int p2 = p + 1;
+		uint8_t p2 = p + 1;
 		if (p2 >= NUM_LEDS)
 			p2 = 0;
 
@@ -543,14 +541,23 @@ void draw_light_guy(light_guy_data_t * guy){
 			guy->draw_buffer[p2][0] = guy->hv[0];
 			//interpolate value
 			guy->draw_buffer[p2][1] = guy->hv[1] * res * res;
+
+			//draw inbetween values that may have been mist
+			for(uint8_t i = (guy->position_last + 1); i < p2; i++){
+				guy->draw_buffer[i][0] = guy->hv[0];
+				//interpolate value
+				guy->draw_buffer[i][1] = guy->hv[1];
+			}
 		} else {
 			float res_inv = 1.0f - res;
 			res_inv = sin(res_inv * 1.57 + 4.71) + 1.0f;
 			guy->draw_buffer[p][0] = guy->hv[0];
 			//interpolate value
 			guy->draw_buffer[p][1] = guy->hv[1] * res_inv * res_inv;
+			//TODO deal with position_last
 		}
 	}
+
 }
 
 void draw(pattern_t pattern, unsigned long time, bool trig){
@@ -589,9 +596,10 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 					= light_guys[light_guys_index].position;
 				//position mod is per millisecond
 				light_guys[light_guys_index].position_mod = (float)(NUM_LEDS) / (float)interval;
+
 				//usually we want to go half as fast, which means we need to move
 				//twice as far in the interval, every once in a while we let it go at normal rate
-				if (random(8) > 1) {
+				if (random(16) > 1) {
 					light_guys[light_guys_index].position_mod *= 0.5;
 				} 
 				//light_guys[light_guys_index].position_mod = 0.05;
@@ -1015,7 +1023,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 }
 
 void loop() {
-	static pattern_t led_pattern = MODE_WIPE;
+	static pattern_t led_pattern = GUYS;
 	static unsigned long trigger_next = 0;
 	static unsigned long trigger_last = 0;
 	unsigned long time = millis();
