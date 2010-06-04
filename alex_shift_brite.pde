@@ -36,6 +36,9 @@
 #define TRIGGER_MIN_INTERVAL 200
 #define TRIG_DISPLAY_TIME 50
 
+//ms
+#define SWELL_TIME 300.0f
+
 #include "hsvrgb.h"
 #include "math.h"
 #include <avr/pgmspace.h>
@@ -46,7 +49,7 @@ typedef enum {
 	GUYS,
 	MODE_WIPE,
 	VERT_MIRROR,
-	FADE_IN,
+	SWELL,
 	//FADE,
 	//QUAD_ECHO,
 	//ROTATION,
@@ -367,8 +370,8 @@ void setup() {
 	//init the pattern
 	set_pattern(GUYS);
 	set_pattern(MODE_WIPE);
-	set_pattern(FADE_IN);
 	set_pattern(VERT_MIRROR);
+	set_pattern(SWELL);
 }
 
 void set_display(uint8_t val) {
@@ -584,7 +587,7 @@ void draw_light_guy(light_guy_data_t * guy, bool do_feedback = true){
 void draw(pattern_t pattern, unsigned long time, bool trig){
 	static uint8_t trigger_count = 0;
 	uint16_t rgb[3];
-	long interval = 0;
+	long interval = 1;
 
 	//we don't draw the first time around
 	if (draw_time_last == 0) {
@@ -603,7 +606,11 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 			trig = false;
 		}
 		trigger_last = time;
+		//just in case, but this shouldn't ever happen
+		if (interval <= 0)
+			return;
 	}
+
 
 	switch (pattern) {
 		case GUYS:
@@ -849,6 +856,52 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 					LEDChannels[i][k] = rgb[k];
 					if (LEDChannels[i][k] > 0x3ff)
 						LEDChannels[i][k] = 0x3ff;
+				}
+			}
+
+			break;
+		case SWELL:
+			{
+				unsigned long time_since_last = time - draw_time_last;
+				if (trig) {
+					light_guys[0].active = true;
+					light_guys[0].position = 0;
+					light_guys[0].position = 0;
+					light_guys[0].position_last = light_guys[0].position;
+
+					//figure out the correct hue increment
+					light_guys[0].hv[0] += 0.211111;
+					while(light_guys[0].hv[0] >= 1.0)
+						light_guys[0].hv[0] -= 1.0;
+					//this is not actually the hv value, we use it to go from 0 to 1 over an amount of time
+					light_guys[0].hv[1] = 0.0;
+
+					light_guys[0].position_mod = 0.5f * (float)HALF_NUM_LEDS / 
+						(float)(interval);
+				}
+				if(!light_guys[0].active)
+					break;
+
+				//go from zero to one in SWELL_TIME ms
+				if (time_since_last > 0)
+					light_guys[0].hv[1] += time_since_last / SWELL_TIME;
+				if (light_guys[0].hv[1] >= 1.0f)
+					light_guys[0].active = false;
+
+				hsv[0] = light_guys[0].hv[0];
+				hsv[1] = 1.0f;
+				hsv[2] = sin(light_guys[0].hv[1] * 3.14);
+				hsv[2] *= hsv[2];
+
+				hsv2rgb(hsv, rgb);
+
+				for(uint8_t i = 0; i < NUM_LEDS; i++){
+					for(uint8_t k = 0; k < 3; k++) {
+						//ASSIGNMENT, not addition!
+						LEDChannels[i][k] = rgb[k];
+						if (LEDChannels[i][k] > 0x3ff)
+							LEDChannels[i][k] = 0x3ff;
+					}
 				}
 			}
 
@@ -1115,7 +1168,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 }
 
 void loop() {
-	static pattern_t led_pattern = VERT_MIRROR;
+	static pattern_t led_pattern = SWELL;
 	static unsigned long trigger_next = 0;
 	static unsigned long trigger_last = 0;
 	unsigned long time = millis();
