@@ -46,11 +46,13 @@
 
 typedef enum {
 	NONE = 0,
-	GUYS,
-	MODE_WIPE,
-	VERT_MIRROR,
 	SWELL,
+	SINGLE_GUY,
+	MULT_GUYS,
+	MODE_WIPE,
 	GATE,
+	VERT_MIRROR,
+	ECHO,
 	//FADE,
 	//QUAD_ECHO,
 	//ROTATION,
@@ -135,7 +137,7 @@ typedef struct _light_guy_data_t {
 	float draw_buffer[NUM_LEDS][2];
 } light_guy_data_t;
 
-#define NUM_LIGHT_GUYS 1
+#define NUM_LIGHT_GUYS 3
 light_guy_data_t light_guys[NUM_LIGHT_GUYS];
 uint8_t light_guys_index;
 
@@ -262,6 +264,9 @@ void set_pattern(pattern_t new_pat){
 			light_guys[0].active = true;
 			//this is a position in a sin function
 			light_guys[0].hv[1] = 0.0f;
+			break;
+		case ECHO:
+			light_guys[0].position = 0;
 		default:
 			break;
 	}
@@ -373,11 +378,12 @@ void setup() {
 	WriteLEDArray();
 
 	//init the pattern
-	set_pattern(GUYS);
+	set_pattern(SINGLE_GUY);
 	set_pattern(MODE_WIPE);
 	set_pattern(VERT_MIRROR);
 	set_pattern(SWELL);
 	set_pattern(GATE);
+	set_pattern(SINGLE_GUY);
 }
 
 void set_display(uint8_t val) {
@@ -624,11 +630,15 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 
 
 	switch (pattern) {
-		case GUYS:
+		case SINGLE_GUY:
+		case MULT_GUYS:
 			clear();
 			//on trig, reset position and color
 			if (trig && (trigger_count % 2) == 0) {
-				light_guys_index = (light_guys_index + 1) % NUM_LIGHT_GUYS;
+				if (pattern == MULT_GUYS)
+					light_guys_index = (light_guys_index + 1) % NUM_LIGHT_GUYS;
+				else
+					light_guys_index = 0;
 				light_guys[light_guys_index].active = true;
 				light_guys[light_guys_index].position = random(NUM_LEDS);
 				light_guys[light_guys_index].position_last
@@ -663,7 +673,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 
 			//for now just do light guy
 			for(unsigned int i = 0; i < NUM_LIGHT_GUYS; i++) {
-				if(!light_guys[light_guys_index].active)
+				if(!light_guys[i].active)
 					continue;
 				//increment the position
 				light_guys[i].position_last = light_guys[i].position;
@@ -921,7 +931,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 				while(light_guys[0].hv[0] >= 1.0)
 					light_guys[0].hv[0] -= 1.0;
 
-				light_guys[0].fbdk[0] = 0.0005;
+				light_guys[0].fbdk[0] = 0.0008;
 				light_guys[0].fbdk[1] = 0.99;
 				light_guys[0].fbdk_type = ADD;
 
@@ -1232,7 +1242,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 }
 
 void loop() {
-	static pattern_t led_pattern = GATE;
+	static pattern_t led_pattern = SINGLE_GUY;
 	static unsigned long trigger_next = 0;
 	static unsigned long trigger_last = 0;
 	unsigned long time = millis();
