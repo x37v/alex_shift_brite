@@ -55,8 +55,8 @@ typedef enum {
 	GATE,
 	VERT_MIRROR,
 	ECHO,
+	QUAD_ECHO,
 	//FADE,
-	//QUAD_ECHO,
 	//ROTATION,
 	//WIPE,
 	PATTERN_T_END
@@ -65,12 +65,14 @@ typedef enum {
 float hsv[3];
 #define HIST_LEN 4
 
+/*
 typedef struct _fade_pattern_data_t {
 	float fade_level;
 	unsigned long start_evolve;
 } fade_pattern_data_t;
 
 fade_pattern_data_t fade_pattern_data;
+*/
 
 #define FADE_EVOLVE_DELAY 200
 #define WIPE_EVOLVE_DELAY 1000
@@ -87,9 +89,10 @@ typedef struct _echo_pattern_data_t {
 #define ECHO_PAT_LEN 4
 //ms
 #define ECHO_PAT_ON_LEN 60
-//volatile echo_pattern_data_t echo_pattern_data[ECHO_PAT_LEN];
+volatile echo_pattern_data_t echo_pattern_data[ECHO_PAT_LEN];
 volatile uint8_t echo_pattern_index;
 
+/*
 #define ROTATION_GUY_COUNT 6
 #define ROTATION_ACCEL_TIME 80
 typedef struct _rotation_guy_t {
@@ -119,6 +122,7 @@ typedef struct _wipe_pattern_data_t {
 } wipe_pattern_data_t;
 
 //wipe_pattern_data_t wipe_pattern_data;
+*/
 
 
 //light_guy stuff
@@ -255,6 +259,11 @@ void set_pattern(pattern_t new_pat){
 			light_guys[i].draw_buffer[j][1] = 0.0;
 		}
 	}
+
+	hsv[0] = 0.0;
+	hsv[1] = 1.0;
+	hsv[2] = 0.0;
+
 	switch(new_pat) {
 		case MODE_WIPE:
 			//on the first go we want to be at the last valid index so we start
@@ -269,15 +278,19 @@ void set_pattern(pattern_t new_pat){
 			break;
 		case ECHO:
 			light_guys[0].position = 0;
+		case QUAD_ECHO:
+			//a zero level means do not draw
+			for(uint8_t i = 0; i < ECHO_PAT_LEN; i++){
+				echo_pattern_data[i].level = 0.0f;
+			}
+			echo_pattern_index = 0;
+			break;
 		default:
 			break;
 	}
 
-#if 0
 
-	hsv[0] = 0.0;
-	hsv[1] = 1.0;
-	hsv[2] = 0.0;
+#if 0
 
 	//clear what has been drawn
 	clear();
@@ -985,7 +998,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 
 			break;
 		case ECHO:
-			if(trig && (trigger_count % 3) == 0) {
+			if(trig && (trigger_count % 2) == 0) {
 				//set the guy to active
 				light_guys[0].active = true;
 
@@ -1054,79 +1067,28 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 				light_guys[0].active = false;
 
 			break;
-		case NONE:
-		default:
-			clear();
-			break;
-	}
-
-#if 0
-	switch(pattern){
-		case FADE:
-			hsv[1] = 1.0;
-			//fade in on trig
-			if(trig){
-				hsv[0] = (float)random(256) / 256.0f;
-				fade_pattern_data.fade_level = 0.01;
-				fade_pattern_data.start_evolve = 0;
-
-			} else if(fade_pattern_data.start_evolve == 0 && 
-					fade_pattern_data.fade_level > 0.0f){
-				fade_pattern_data.fade_level = (fade_pattern_data.fade_level + 0.003);
-
-				if(hsv[0] >= 1.0f)
-					hsv[0] -= 1.0f;
-
-				if(fade_pattern_data.fade_level >= 1.0f){
-					fade_pattern_data.fade_level = 1.0f;
-					//after FADE_EVOLVE_DELAY, evolve
-					fade_pattern_data.start_evolve = time + FADE_EVOLVE_DELAY;
-				}
-			} else if(fade_pattern_data.start_evolve && 
-					fade_pattern_data.start_evolve <= time){
-				//increment the color slowly over time
-				hsv[0] += 0.0001;
-				if(hsv[0] >= 1.0f)
-					hsv[0] -= 1.0f;
-				//reduce the brightness to half during the evolving colors
-				if(fade_pattern_data.fade_level > 0.5)
-					fade_pattern_data.fade_level -= 0.001;
-			}
-
-			hsv[2] = sin(fade_pattern_data.fade_level * 1.57 + 4.71) + 1.0f;
-			hsv2rgb(hsv, rgb);
-
-			for(uint8_t i = 0; i < NUM_LEDS; i++){
-				for(uint8_t j = 0; j < 3; j++)
-					LEDChannels[i][j] = rgb[j];
-			}
-			break;
 		case QUAD_ECHO:
 			clear();
 			if(trig){
-				if(time_last != 0){
-					long interval = (time - time_last);
-					if(interval >= 700)
-						interval = interval >> 1;
-					if(interval > (ECHO_PAT_ON_LEN + 20) && interval < 700){
-						uint8_t span = 1;
-						float hue = (float)random(256) / 256.0f;
-						//every once in a while draw to the whole ring..
-						if(random(255) > 200)
-							span = 4;
-						for(uint8_t i = 0; i < span; i++){
-							hsv[0] = (float)random(256) / 256.0f;
-							echo_pattern_data[echo_pattern_index].interval = interval;
-							echo_pattern_data[echo_pattern_index].next_update = time + ECHO_PAT_ON_LEN;
-							echo_pattern_data[echo_pattern_index].level = 1.0;
-							echo_pattern_data[echo_pattern_index].level_mod = -0.15;
-							echo_pattern_data[echo_pattern_index].on = true;
-							echo_pattern_data[echo_pattern_index].hue = hue;
-							echo_pattern_index = (echo_pattern_index + 1) % ECHO_PAT_LEN;
-						}
+				if(interval >= 700)
+					interval = interval >> 1;
+				if(interval > (ECHO_PAT_ON_LEN + 20) && interval < 700){
+					uint8_t span = 1;
+					float hue = (float)random(256) / 256.0f;
+					//every once in a while draw to the whole ring..
+					if(random(255) > 200)
+						span = 4;
+					for(uint8_t i = 0; i < span; i++){
+						hsv[0] = (float)random(256) / 256.0f;
+						echo_pattern_data[echo_pattern_index].interval = interval;
+						echo_pattern_data[echo_pattern_index].next_update = time + ECHO_PAT_ON_LEN;
+						echo_pattern_data[echo_pattern_index].level = 1.0;
+						echo_pattern_data[echo_pattern_index].level_mod = -0.15;
+						echo_pattern_data[echo_pattern_index].on = true;
+						echo_pattern_data[echo_pattern_index].hue = hue;
+						echo_pattern_index = (echo_pattern_index + 1) % ECHO_PAT_LEN;
 					}
 				}
-				time_last = time;
 			}
 
 			hsv[0] = hsv[1] = hsv[2] = 0.0f;
@@ -1174,6 +1136,53 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 				}
 			}
 			break;
+		case NONE:
+		default:
+			clear();
+			break;
+	}
+
+#if 0
+	switch(pattern){
+		case FADE:
+			hsv[1] = 1.0;
+			//fade in on trig
+			if(trig){
+				hsv[0] = (float)random(256) / 256.0f;
+				fade_pattern_data.fade_level = 0.01;
+				fade_pattern_data.start_evolve = 0;
+
+			} else if(fade_pattern_data.start_evolve == 0 && 
+					fade_pattern_data.fade_level > 0.0f){
+				fade_pattern_data.fade_level = (fade_pattern_data.fade_level + 0.003);
+
+				if(hsv[0] >= 1.0f)
+					hsv[0] -= 1.0f;
+
+				if(fade_pattern_data.fade_level >= 1.0f){
+					fade_pattern_data.fade_level = 1.0f;
+					//after FADE_EVOLVE_DELAY, evolve
+					fade_pattern_data.start_evolve = time + FADE_EVOLVE_DELAY;
+				}
+			} else if(fade_pattern_data.start_evolve && 
+					fade_pattern_data.start_evolve <= time){
+				//increment the color slowly over time
+				hsv[0] += 0.0001;
+				if(hsv[0] >= 1.0f)
+					hsv[0] -= 1.0f;
+				//reduce the brightness to half during the evolving colors
+				if(fade_pattern_data.fade_level > 0.5)
+					fade_pattern_data.fade_level -= 0.001;
+			}
+
+			hsv[2] = sin(fade_pattern_data.fade_level * 1.57 + 4.71) + 1.0f;
+			hsv2rgb(hsv, rgb);
+
+			for(uint8_t i = 0; i < NUM_LEDS; i++){
+				for(uint8_t j = 0; j < 3; j++)
+					LEDChannels[i][j] = rgb[j];
+			}
+			break;
 		case ROTATION:
 			clear();
 			if(trig){
@@ -1211,8 +1220,8 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 					/*
 					//on a trig, reverse
 					if(trig)
-						guy->position_mod = -guy->position_mod;
-						*/
+					guy->position_mod = -guy->position_mod;
+					 */
 					if(faster)
 						guy->position += (4 * guy->position_mod);
 					else
