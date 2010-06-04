@@ -15,9 +15,10 @@
 
 #define PATTERN_SEL_PIN 17
 
-#define ANALOG_TRIGGER_PIN 0
+#define ANALOG_TRIGGER_PIN 4
+#define ANALOG_PULLUP_PIN 18
 //15 == analog 1
-#define ANALOG_PATTERN_SEL_GND 15
+//#define ANALOG_PATTERN_SEL_GND 15
 
 #include "hsvrgb.h"
 #include "math.h"
@@ -25,10 +26,9 @@
 
 #define NUM_LEDS 24
 
-#define ANALOG_THRES 170
+#define ANALOG_THRES 1000
 #define TRIGGER_MIN_INTERVAL 200
 
-volatile unsigned long trigger_next;
 
 typedef enum {
 	NONE,
@@ -286,6 +286,8 @@ void set_pattern(pattern_t new_pat){
 
 void setup() {
 
+	Serial.begin(9600);          //  setup serial
+
 	//init the pattern
 	set_pattern(NONE);
 	set_pattern(MODE_WIPE);
@@ -293,8 +295,6 @@ void setup() {
 	hist = 0;
 	but_hist = 0;
 	down = false;
-
-	trigger_next = 0;
 
    pinMode(datapin, OUTPUT);
    pinMode(latchpin, OUTPUT);
@@ -308,9 +308,13 @@ void setup() {
 	//pinMode(PATTERN_SEL_GND, OUTPUT);
 	//digitalWrite(PATTERN_SEL_GND, LOW);
 
+	//analog input shoud not have a pullup
+	pinMode(ANALOG_PULLUP_PIN, INPUT);
+	digitalWrite(ANALOG_PULLUP_PIN, LOW);
+
 	//set the analog trigger to be an output and set to zero
-	pinMode(ANALOG_PATTERN_SEL_GND, OUTPUT);
-	digitalWrite(ANALOG_PATTERN_SEL_GND, LOW);
+	//pinMode(ANALOG_PATTERN_SEL_GND, OUTPUT);
+	//digitalWrite(ANALOG_PATTERN_SEL_GND, LOW);
 
 	//set the trigger pin to be an input, with pullup
 	pinMode(PATTERN_SEL_PIN, INPUT);
@@ -843,8 +847,9 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 }
 
 void loop() {
+	static unsigned long trigger_next = 0;
 	unsigned long time = millis();
-	uint8_t analog_val = analogRead(ANALOG_TRIGGER_PIN);
+	uint16_t analog_val = analogRead(ANALOG_TRIGGER_PIN);
 	bool trig = false;
 
 	//check for a trigger
@@ -863,20 +868,19 @@ void loop() {
 		if(!down){
 			//set_pattern((pattern_t)((led_pattern + 1) % PATTERN_T_END));
 			down = true;
-			//XXX temp! just using the button for trigger now
-			trig = true;
+			////XXX temp! just using the button for trigger now
+			//trig = true;
 		}
 	}
 
-#if 0
 	//if we're above the threshold and the time is greater than
 	//the time threshold
 	if(analog_val >= ANALOG_THRES && time >= trigger_next ){
+		Serial.println(analog_val);
 		trig = true;
 		//set the minimum time for the next trigger
 		trigger_next = time + TRIGGER_MIN_INTERVAL;
 	}
-#endif
 
 	//draw on a trig, or every 2 milliseconds
 	if(trig || (time % 2 == 0)){
