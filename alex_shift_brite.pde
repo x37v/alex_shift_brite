@@ -29,18 +29,19 @@
 #define SEVEN_SEG_G 8
 #define SEVEN_SEG_P 9
 
-#include "hsvrgb.h"
-#include "math.h"
-#include <avr/pgmspace.h>
-
 #define NUM_LEDS 24
 
 #define ANALOG_THRES 1000
 #define TRIGGER_MIN_INTERVAL 200
+#define TRIG_DISPLAY_TIME 50
+
+#include "hsvrgb.h"
+#include "math.h"
+#include <avr/pgmspace.h>
 
 
 typedef enum {
-	NONE,
+	NONE = 0,
 	GUYS,
 	MODE_WIPE,
 	//FADE,
@@ -49,8 +50,6 @@ typedef enum {
 	//WIPE,
 	PATTERN_T_END
 } pattern_t;
-
-volatile pattern_t led_pattern;
 
 float hsv[3];
 #define HIST_LEN 4
@@ -152,6 +151,14 @@ int SB_BlueCommand;
 //volatile unsigned long global_interval;
 //volatile unsigned long time_last;
 
+//prototypes
+void set_display(uint8_t val);
+void clear();
+void SB_SendPacket();
+void WriteLEDArray();
+void set_pattern(pattern_t new_pat);
+
+
 void clear() {
 	for(uint8_t i = 0; i < NUM_LEDS; i++){
 		for(uint8_t j = 0; j < 3; j++) {
@@ -204,8 +211,9 @@ void WriteLEDArray() {
 }
 
 void set_pattern(pattern_t new_pat){
-	
-	led_pattern = new_pat;
+
+	//change the display
+	set_display(new_pat);
 
 	//the last time we've drawn, reset
 	draw_time_last = 0;
@@ -231,7 +239,7 @@ void set_pattern(pattern_t new_pat){
 			light_guys[i].draw_buffer[j][1] = 0.0;
 		}
 	}
-	switch(led_pattern) {
+	switch(new_pat) {
 		case MODE_WIPE:
 			//on the first go we want to be at the last valid index so we start
 			//on the first trigger at 0
@@ -297,10 +305,6 @@ void setup() {
 
 	Serial.begin(9600);          //  setup serial
 
-	//init the pattern
-	set_pattern(NONE);
-	set_pattern(MODE_WIPE);
-
 	hist = 0;
 	but_hist = 0;
 	down = false;
@@ -352,9 +356,9 @@ void setup() {
 	delay(10);
 	WriteLEDArray();
 
-	//global_interval = 0;
-	//time_last = 0;
-
+	//init the pattern
+	set_pattern(NONE);
+	set_pattern(MODE_WIPE);
 }
 
 void set_display(uint8_t val) {
@@ -1005,7 +1009,9 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 }
 
 void loop() {
+	static pattern_t led_pattern = NONE;
 	static unsigned long trigger_next = 0;
+	static unsigned long trigger_last = 0;
 	unsigned long time = millis();
 	uint16_t analog_val = analogRead(ANALOG_TRIGGER_PIN);
 	bool trig = false;
@@ -1025,9 +1031,8 @@ void loop() {
 		//down
 	} else if(but_hist == 0x00){
 		if(!down){
-			butpush = (butpush + 1) % 16;
-			set_display(butpush);
-			//set_pattern((pattern_t)((led_pattern + 1) % PATTERN_T_END));
+			led_pattern = (pattern_t)((led_pattern + 1) % PATTERN_T_END);
+			set_pattern(led_pattern);
 			down = true;
 			////XXX temp! just using the button for trigger now
 			//trig = true;
@@ -1041,6 +1046,10 @@ void loop() {
 		trig = true;
 		//set the minimum time for the next trigger
 		trigger_next = time + TRIGGER_MIN_INTERVAL;
+		trigger_last = time;
+		digitalWrite(SEVEN_SEG_P, LOW);
+	} else if(trigger_last + TRIG_DISPLAY_TIME < time){
+		digitalWrite(SEVEN_SEG_P, HIGH);
 	}
 
 	//draw on a trig, or every 2 milliseconds
