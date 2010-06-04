@@ -380,12 +380,12 @@ void setup() {
 	WriteLEDArray();
 
 	//init the pattern
-	set_pattern(SINGLE_GUY);
-	set_pattern(MODE_WIPE);
-	set_pattern(VERT_MIRROR);
-	set_pattern(SWELL);
-	set_pattern(GATE);
-	set_pattern(ECHO);
+	//set_pattern(SINGLE_GUY);
+	//set_pattern(MODE_WIPE);
+	//set_pattern(VERT_MIRROR);
+	//set_pattern(SWELL);
+	//set_pattern(GATE);
+	set_pattern(NONE);
 }
 
 void set_display(uint8_t val) {
@@ -843,19 +843,22 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 				light_guys[0].fbdk[1] = 0.96;
 			}
 
-			if (!light_guys[0].active)
-				break;
-			//draw then increment position
-			draw_light_guy(&light_guys[0], true);
-			light_guys[0].position_last = light_guys[0].position;
-			light_guys[0].position += ((float)time_since_last * light_guys[0].position_mod);
+			if (light_guys[0].active){
+				//draw then increment position
+				draw_light_guy(&light_guys[0], true);
+				light_guys[0].position_last = light_guys[0].position;
+				light_guys[0].position += ((float)time_since_last * light_guys[0].position_mod);
 
-			if (light_guys[0].position < 0) {
-				light_guys[0].position = 0;
-				light_guys[0].active = false;
-			} else if (light_guys[0].position > HALF_NUM_LEDS - 1) {
-				light_guys[0].position = HALF_NUM_LEDS - 1;
-				light_guys[0].active = false;
+				if (light_guys[0].position < 0) {
+					light_guys[0].position = 0;
+					light_guys[0].active = false;
+				} else if (light_guys[0].position > HALF_NUM_LEDS - 1) {
+					light_guys[0].position = HALF_NUM_LEDS - 1;
+					light_guys[0].active = false;
+				}
+			} else {
+				//if it is not active then just do the feedback
+				draw_light_guy_fbdk(&light_guys[0]);
 			}
 
 			//mirror
@@ -922,6 +925,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 					}
 				}
 			}
+			break;
 		case GATE:
 			if (trig) {
 				light_guys[0].active = true;
@@ -1314,7 +1318,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 }
 
 void loop() {
-	static pattern_t led_pattern = ECHO;
+	static pattern_t led_pattern = NONE;
 	static unsigned long trigger_next = 0;
 	static unsigned long trigger_last = 0;
 	unsigned long time = millis();
@@ -1337,11 +1341,11 @@ void loop() {
 		if(!down){
 			down = true;
 			////XXX temp! just using the button for trigger now
-			//led_pattern = (pattern_t)((led_pattern + 1) % PATTERN_T_END);
-			//set_pattern(led_pattern);
+			led_pattern = (pattern_t)((led_pattern + 1) % PATTERN_T_END);
+			set_pattern(led_pattern);
 
-			trig = true;
-			digitalWrite(SEVEN_SEG_P, HIGH);
+			//trig = true;
+			//digitalWrite(SEVEN_SEG_P, HIGH);
 		}
 	}
 
