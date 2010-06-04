@@ -709,51 +709,49 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 			break;
 		case MODE_WIPE:
 			if (trig) {
-				if (trigger_count % 2 == 0) {
-					//increment our index
-					light_guys_index = (light_guys_index + 1) % MODE_WIPE_PATTERN_LEN;
+				//increment our index
+				light_guys_index = (light_guys_index + 1) % MODE_WIPE_PATTERN_LEN;
 
-					light_guys[0].active = true;
+				light_guys[0].active = true;
 
-					//update per mode [light_guys_index]
-					//the 0th time we want it to go around in one beat, the 1st we draw
-					//half the amount so we divide the position_mod by 2.. ..
-					if ( light_guys_index < HALF_MODE_WIPE_LEN) {
-						light_guys[0].position_mod = (float)NUM_LEDS / 
-							(float)(interval * (light_guys_index + 1));
-					} else {
-						light_guys[0].position_mod = (float)NUM_LEDS / 
-							(float)(interval * (MODE_WIPE_PATTERN_LEN - light_guys_index));
-					}
-
-					if ((light_guys_index % 2) == 0) {
-						//drawing always starts at zero
-						light_guys[0].position = 0;
-					} else {
-						//erasing starts at mode_wipe_ends - 1
-						light_guys[0].position = mode_wipe_ends[light_guys_index] - 1;
-						//we decrement position from the wipe_end - 1
-						light_guys[0].position_mod = -light_guys[0].position_mod;
-					}
-					light_guys[0].position_last = light_guys[0].position;
-
-					//every other time we erase, we don't care about hue
-					if (light_guys_index % 2 == 0) {
-						//figure out the correct hue increment
-						light_guys[0].hv[0] += 0.111111;
-						while(light_guys[0].hv[0] >= 1.0)
-							light_guys[0].hv[0] -= 1.0;
-						light_guys[0].hv[1] = 1.0;
-					} else {
-						light_guys[0].hv[1] = 0.0;
-					}
-
-					//XXX figure out this:
-					light_guys[0].fbdk_type = ADD;
-					light_guys[0].fbdk[0] = 0.005;
-					light_guys[0].fbdk[1] = 1.0;
-
+				//update per mode [light_guys_index]
+				//the 0th time we want it to go around in one beat, the 1st we draw
+				//half the amount so we divide the position_mod by 2.. ..
+				if ( light_guys_index < HALF_MODE_WIPE_LEN) {
+					light_guys[0].position_mod = (float)NUM_LEDS / 
+						(float)(interval * (light_guys_index + 1));
+				} else {
+					light_guys[0].position_mod = (float)NUM_LEDS / 
+						(float)(interval * (MODE_WIPE_PATTERN_LEN - light_guys_index));
 				}
+
+				if ((light_guys_index % 2) == 0) {
+					//drawing always starts at zero
+					light_guys[0].position = 0;
+				} else {
+					//erasing starts at mode_wipe_ends - 1
+					light_guys[0].position = mode_wipe_ends[light_guys_index] - 1;
+					//we decrement position from the wipe_end - 1
+					light_guys[0].position_mod = -light_guys[0].position_mod;
+				}
+				light_guys[0].position_last = light_guys[0].position;
+
+				//every other time we erase, we don't care about hue
+				if (light_guys_index % 2 == 0) {
+					//figure out the correct hue increment
+					light_guys[0].hv[0] += 0.111111;
+					while(light_guys[0].hv[0] >= 1.0)
+						light_guys[0].hv[0] -= 1.0;
+					light_guys[0].hv[1] = 1.0;
+				} else {
+					light_guys[0].hv[1] = 0.0;
+				}
+
+				//XXX figure out this:
+				light_guys[0].fbdk_type = ADD;
+				light_guys[0].fbdk[0] = 0.005;
+				light_guys[0].fbdk[1] = 1.0;
+
 			}
 
 			//if the guy isn't active then we break
