@@ -535,6 +535,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 			if (light_guys_index % 2 == 0) {
 				draw_light_guy(&light_guys[0]);
 			} else {
+				//XXX get inbetween guys
 				light_guys[0].draw_buffer[(uint8_t)light_guys[0].position % NUM_LEDS][0] = 0.0;
 				light_guys[0].draw_buffer[(uint8_t)light_guys[0].position % NUM_LEDS][1] = 0.0;
 			}
