@@ -50,6 +50,7 @@ typedef enum {
 	MODE_WIPE,
 	VERT_MIRROR,
 	SWELL,
+	GATE,
 	//FADE,
 	//QUAD_ECHO,
 	//ROTATION,
@@ -257,6 +258,10 @@ void set_pattern(pattern_t new_pat){
 			//light_guys_index = (MODE_WIPE_PATTERN_LEN << 1) - 1;
 			light_guys_index = MODE_WIPE_PATTERN_LEN - 1;
 			break;
+		case GATE:
+			light_guys[0].active = true;
+			//this is a position in a sin function
+			light_guys[0].hv[1] = 0.0f;
 		default:
 			break;
 	}
@@ -372,6 +377,7 @@ void setup() {
 	set_pattern(MODE_WIPE);
 	set_pattern(VERT_MIRROR);
 	set_pattern(SWELL);
+	set_pattern(GATE);
 }
 
 void set_display(uint8_t val) {
@@ -504,32 +510,36 @@ void set_display(uint8_t val) {
 	};
 }
 
+void draw_light_guy_fbdk(light_guy_data_t * guy) {
+	for(uint8_t j = 0; j < NUM_LEDS; j++) {
+		//h and v only
+		//guy->draw_buffer[j][0] += guy->fbdk[0];
+		if(guy->fbdk_type == MULT)
+			guy->draw_buffer[j][0] *= guy->fbdk[0];
+		else
+			guy->draw_buffer[j][0] += guy->fbdk[0];
+		//guy->draw_buffer[j][0] *= 0.98;
+		while (guy->draw_buffer[j][0] > 1.0f)
+			guy->draw_buffer[j][0] -= 1.0f;
+
+		guy->draw_buffer[j][1] *= guy->fbdk[1];
+		if (guy->draw_buffer[j][1] > 1.0f)
+			guy->draw_buffer[j][1] = 1.0;
+
+		//set a threshold where the color and hue no longer have effect
+		if(guy->draw_buffer[j][1] < 0.001f) {
+			guy->draw_buffer[j][1] = 0.0f;
+			guy->draw_buffer[j][0] = 0.0f;
+		}
+	}
+}
+
 //pass the guy and its last position
 void draw_light_guy(light_guy_data_t * guy, bool do_feedback = true){
 
 	//update per the feedback
 	if (do_feedback) {
-		for(uint8_t j = 0; j < NUM_LEDS; j++) {
-			//h and v only
-			//guy->draw_buffer[j][0] += guy->fbdk[0];
-			if(guy->fbdk_type == MULT)
-				guy->draw_buffer[j][0] *= guy->fbdk[0];
-			else
-				guy->draw_buffer[j][0] += guy->fbdk[0];
-			//guy->draw_buffer[j][0] *= 0.98;
-			while (guy->draw_buffer[j][0] > 1.0f)
-				guy->draw_buffer[j][0] -= 1.0f;
-
-			guy->draw_buffer[j][1] *= guy->fbdk[1];
-			if (guy->draw_buffer[j][1] > 1.0f)
-				guy->draw_buffer[j][1] = 1.0;
-
-			//set a threshold where the color and hue no longer have effect
-			if(guy->draw_buffer[j][1] < 0.001f) {
-				guy->draw_buffer[j][1] = 0.0f;
-				guy->draw_buffer[j][0] = 0.0f;
-			}
-		}
+		draw_light_guy_fbdk(guy);
 	}
 
 	//interpolate the new position lighting
@@ -588,6 +598,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 	static uint8_t trigger_count = 0;
 	uint16_t rgb[3];
 	long interval = 1;
+	unsigned long time_since_last = time - draw_time_last;
 
 	//we don't draw the first time around
 	if (draw_time_last == 0) {
@@ -656,7 +667,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 					continue;
 				//increment the position
 				light_guys[i].position_last = light_guys[i].position;
-				light_guys[i].position += ((float)(time - draw_time_last) * light_guys[i].position_mod);
+				light_guys[i].position += ((float)time_since_last * light_guys[i].position_mod);
 				//light_guys[i].position += light_guys[i].position_mod;
 				//stay in range
 				while (light_guys[i].position >= NUM_LEDS)
@@ -762,7 +773,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 
 			//update our position
 			light_guys[0].position_last = light_guys[0].position;
-			light_guys[0].position += ((float)(time - draw_time_last) * light_guys[0].position_mod);
+			light_guys[0].position += ((float)time_since_last * light_guys[0].position_mod);
 
 			//mirror, only if we're not at the first position in the pattern
 			if ((light_guys_index != 0) && (light_guys_index != (MODE_WIPE_PATTERN_LEN - 1))) {
@@ -825,7 +836,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 			//draw then increment position
 			draw_light_guy(&light_guys[0], true);
 			light_guys[0].position_last = light_guys[0].position;
-			light_guys[0].position += ((float)(time - draw_time_last) * light_guys[0].position_mod);
+			light_guys[0].position += ((float)time_since_last * light_guys[0].position_mod);
 
 			if (light_guys[0].position < 0) {
 				light_guys[0].position = 0;
@@ -862,10 +873,8 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 			break;
 		case SWELL:
 			{
-				unsigned long time_since_last = time - draw_time_last;
 				if (trig) {
 					light_guys[0].active = true;
-					light_guys[0].position = 0;
 					light_guys[0].position = 0;
 					light_guys[0].position_last = light_guys[0].position;
 
@@ -875,9 +884,6 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 						light_guys[0].hv[0] -= 1.0;
 					//this is not actually the hv value, we use it to go from 0 to 1 over an amount of time
 					light_guys[0].hv[1] = 0.0;
-
-					light_guys[0].position_mod = 0.5f * (float)HALF_NUM_LEDS / 
-						(float)(interval);
 				}
 				if(!light_guys[0].active)
 					break;
@@ -904,6 +910,64 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 					}
 				}
 			}
+		case GATE:
+			if (trig) {
+				light_guys[0].active = true;
+				light_guys[0].position = 0;
+				light_guys[0].position_last = light_guys[0].position;
+
+				//figure out the correct hue increment
+				light_guys[0].hv[0] += 0.211111;
+				while(light_guys[0].hv[0] >= 1.0)
+					light_guys[0].hv[0] -= 1.0;
+
+				light_guys[0].fbdk[0] = 0.0005;
+				light_guys[0].fbdk[1] = 0.99;
+				light_guys[0].fbdk_type = ADD;
+
+				//this is not actually the hv value, we use it to go from 0 to 1 over an amount of time
+				light_guys[0].hv[1] = 0.0;
+			}
+
+			hsv[1] = 1.0f;
+			if(light_guys[0].hv[1] <= 1.0f) {
+
+				//store the hue and value for later feedback
+				hsv[0] = light_guys[0].draw_buffer[0][0] = light_guys[0].hv[0];
+				//fade in
+				hsv[2] = sin(light_guys[0].hv[1] * 1.57 + 4.71) + 1.0f;
+				hsv[2] *= hsv[2];
+				light_guys[0].draw_buffer[0][1] = hsv[2];
+
+				hsv2rgb(hsv, rgb);
+
+				for(uint8_t i = 0; i < NUM_LEDS; i++){
+					for(uint8_t k = 0; k < 3; k++) {
+						//ASSIGNMENT, not addition!
+						LEDChannels[i][k] = rgb[k];
+						if (LEDChannels[i][k] > 0x3ff)
+							LEDChannels[i][k] = 0x3ff;
+					}
+				}
+			} else {
+				draw_light_guy_fbdk(&light_guys[0]);
+
+				hsv[0] = light_guys[0].draw_buffer[0][0];
+				hsv[2] = light_guys[0].draw_buffer[0][1];
+
+				hsv2rgb(hsv, rgb);
+
+				for(uint8_t i = 0; i < NUM_LEDS; i++){
+					for(uint8_t k = 0; k < 3; k++) {
+						//ASSIGNMENT, not addition!
+						LEDChannels[i][k] = rgb[k];
+						if (LEDChannels[i][k] > 0x3ff)
+							LEDChannels[i][k] = 0x3ff;
+					}
+				}
+			}
+
+			light_guys[0].hv[1] += time_since_last / SWELL_TIME;
 
 			break;
 		case NONE:
@@ -1168,7 +1232,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 }
 
 void loop() {
-	static pattern_t led_pattern = SWELL;
+	static pattern_t led_pattern = GATE;
 	static unsigned long trigger_next = 0;
 	static unsigned long trigger_last = 0;
 	unsigned long time = millis();
