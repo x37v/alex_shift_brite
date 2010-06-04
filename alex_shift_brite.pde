@@ -39,6 +39,8 @@
 //ms
 #define SWELL_TIME 300.0f
 
+#define NUM_ECHOS 6
+
 #include "hsvrgb.h"
 #include "math.h"
 #include <avr/pgmspace.h>
@@ -383,7 +385,7 @@ void setup() {
 	set_pattern(VERT_MIRROR);
 	set_pattern(SWELL);
 	set_pattern(GATE);
-	set_pattern(SINGLE_GUY);
+	set_pattern(ECHO);
 }
 
 void set_display(uint8_t val) {
@@ -980,6 +982,76 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 			light_guys[0].hv[1] += time_since_last / SWELL_TIME;
 
 			break;
+		case ECHO:
+			if(trig && (trigger_count % 3) == 0) {
+				//set the guy to active
+				light_guys[0].active = true;
+
+				//index says where we start drawing..
+				light_guys_index = (light_guys_index + 1) % NUM_LEDS;
+				//position says the side that it is on, even is on one side, odd is on the other
+				light_guys[0].position = 0;
+
+				light_guys[0].hv[0] = (float)random(256) / 256.0f;
+
+				light_guys[0].fbdk[0] = 0.01;
+				light_guys[0].fbdk[1] = 0.8;
+				light_guys[0].fbdk_type = ADD;
+
+				//we want NUM_LEDS echos per beat, which means we want to position to count to NUM_LEDS each beat
+				light_guys[0].position_mod = (float)NUM_ECHOS / (float)(2 * interval);
+			}
+
+			if(light_guys[0].active) {
+				uint8_t draw_start = 7 * light_guys_index;
+				float hue = light_guys[0].hv[0];
+				float val = (float)NUM_ECHOS - light_guys[0].position;
+				if (val > 1.0f)
+					val = 1.0f;
+				val = sin(val * 1.57 + 1.57);
+				val = sin(val * 1.57 + 1.57);
+				//on odd we start from draw_start + HALF_NUM_LEDS
+				if ((uint8_t)light_guys[0].position % 2) {
+					draw_start += HALF_NUM_LEDS;
+					hue += 0.5f;
+					if (hue >= 1.0f)
+						hue -= 1.0f;
+				}
+
+				//fill 1/2 the draw buffer, erase the other half
+				for (uint8_t i = 0; i < HALF_NUM_LEDS; i++) {
+					light_guys[0].draw_buffer[(i + draw_start) % NUM_LEDS][0] = hue;
+					light_guys[0].draw_buffer[(i + draw_start) % NUM_LEDS][1] = val;
+
+					//light_guys[0].draw_buffer[(i + draw_start + HALF_NUM_LEDS) % NUM_LEDS][1] = 0.0;
+				}
+			}
+
+			//do feedback
+			draw_light_guy_fbdk(&light_guys[0]);
+
+			//actually update the leds
+			for(uint8_t i = 0; i < NUM_LEDS; i++){
+				hsv[1] = 1.0f;
+				hsv[0] = light_guys[0].draw_buffer[i][0];
+				//we want the fade to be smooth, 
+				//we use the v value as the point along a sin
+				hsv[2] = sin(light_guys[0].draw_buffer[i][1] * 1.57 + 4.71) + 1.0f;
+				hsv2rgb(hsv, rgb);
+				for(uint8_t k = 0; k < 3; k++) {
+					//ASSIGNMENT, not addition!
+					LEDChannels[i][k] = rgb[k];
+					if (LEDChannels[i][k] > 0x3ff)
+						LEDChannels[i][k] = 0x3ff;
+				}
+			}
+
+			//update "position"
+			light_guys[0].position += light_guys[0].position_mod * time_since_last;
+			if(light_guys[0].position >= NUM_ECHOS)
+				light_guys[0].active = false;
+
+			break;
 		case NONE:
 		default:
 			clear();
@@ -1242,7 +1314,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 }
 
 void loop() {
-	static pattern_t led_pattern = SINGLE_GUY;
+	static pattern_t led_pattern = ECHO;
 	static unsigned long trigger_next = 0;
 	static unsigned long trigger_last = 0;
 	unsigned long time = millis();
