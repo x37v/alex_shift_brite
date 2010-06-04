@@ -133,9 +133,13 @@ light_guy_data_t light_guys[NUM_LIGHT_GUYS];
 uint8_t light_guys_index;
 
 
-uint8_t mode_wipe_ends[] = { 24, 12, 8, 6, 4, 3, 2, 2, 3, 4, 6, 8, 12, 24};
-#define MODE_WIPE_PATTERN_LEN 14
-#define HALF_MODE_WIPE_LEN 7
+//uint8_t mode_wipe_ends[] = { 24, 12, 8, 6, 4, 3, 2, 2, 3, 4, 6, 8, 12, 24};
+//#define MODE_WIPE_PATTERN_LEN 14
+//#define HALF_MODE_WIPE_LEN 7
+
+uint8_t mode_wipe_ends[] = { 24, 12, 8, 6, 4, 3, 3, 4, 6, 8, 12, 24};
+#define MODE_WIPE_PATTERN_LEN 12
+#define HALF_MODE_WIPE_LEN 6
 
 uint8_t but_hist;
 uint8_t hist;
@@ -358,7 +362,8 @@ void setup() {
 	WriteLEDArray();
 
 	//init the pattern
-	set_pattern(GUYS);
+	//set_pattern(GUYS);
+	set_pattern(MODE_WIPE);
 }
 
 void set_display(uint8_t val) {
@@ -650,9 +655,28 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 					light_guys_index = (light_guys_index + 1) % MODE_WIPE_PATTERN_LEN;
 
 					light_guys[0].active = true;
-					//always start at zero
-					light_guys[0].position = 0;
-					light_guys[0].position_last = 0;
+
+					//update per mode [light_guys_index]
+					//the 0th time we want it to go around in one beat, the 1st we draw
+					//half the amount so we divide the position_mod by 2.. ..
+					if ( light_guys_index < HALF_MODE_WIPE_LEN) {
+						light_guys[0].position_mod = (float)NUM_LEDS / 
+							(float)(interval * (light_guys_index + 1));
+					} else {
+						light_guys[0].position_mod = (float)NUM_LEDS / 
+							(float)(interval * (MODE_WIPE_PATTERN_LEN - light_guys_index));
+					}
+
+					if ((light_guys_index % 2) == 0) {
+						//drawing always starts at zero
+						light_guys[0].position = 0;
+					} else {
+						//erasing starts at mode_wipe_ends - 1
+						light_guys[0].position = mode_wipe_ends[light_guys_index] - 1;
+						//we decrement position from the wipe_end - 1
+						light_guys[0].position_mod = -light_guys[0].position_mod;
+					}
+					light_guys[0].position_last = light_guys[0].position;
 
 					//XXX figure out this:
 					light_guys[0].hv[0] += 0.311111;
@@ -665,16 +689,6 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 					light_guys[0].fbdk[0] = 0.005;
 					light_guys[0].fbdk[1] = 1.0;
 
-					//update per mode [light_guys_index]
-					//the 0th time we want it to go around in one beat, the 1st we draw
-					//half the amount so we divide the position_mod by 2.. ..
-					if ( light_guys_index < HALF_MODE_WIPE_LEN) {
-						light_guys[0].position_mod = (float)NUM_LEDS / 
-							(float)(interval * (light_guys_index + 1));
-					} else {
-						light_guys[0].position_mod = (float)NUM_LEDS / 
-							(float)(interval * (MODE_WIPE_PATTERN_LEN - light_guys_index));
-					}
 				}
 			}
 
@@ -684,9 +698,15 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 
 			//stay in bounds, we wrap in pattern
 			if (light_guys[0].position
-					>= mode_wipe_ends[light_guys_index % MODE_WIPE_PATTERN_LEN]){
+					> (mode_wipe_ends[light_guys_index % MODE_WIPE_PATTERN_LEN] - 1)){
 				light_guys[0].active = false;
-				break;
+			}
+
+			//make sure we don't loop around
+			if (light_guys[0].position > (NUM_LEDS - 1)) {
+				light_guys[0].position = NUM_LEDS - 1;
+			} else if (light_guys[0].position < 0.0f) {
+				light_guys[0].position = 0.0f;
 			}
 
 			//every other time we erase
