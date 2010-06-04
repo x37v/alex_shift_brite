@@ -20,6 +20,15 @@
 //15 == analog 1
 //#define ANALOG_PATTERN_SEL_GND 15
 
+#define SEVEN_SEG_A 2
+#define SEVEN_SEG_B 3
+#define SEVEN_SEG_C 4
+#define SEVEN_SEG_D 5
+#define SEVEN_SEG_E 6
+#define SEVEN_SEG_F 7
+#define SEVEN_SEG_G 8
+#define SEVEN_SEG_P 9
+
 #include "hsvrgb.h"
 #include "math.h"
 #include <avr/pgmspace.h>
@@ -320,6 +329,25 @@ void setup() {
 	pinMode(PATTERN_SEL_PIN, INPUT);
 	digitalWrite(PATTERN_SEL_PIN, HIGH);
 
+	//seven seg display
+	pinMode(SEVEN_SEG_A, OUTPUT);
+	pinMode(SEVEN_SEG_B, OUTPUT);
+	pinMode(SEVEN_SEG_C, OUTPUT);
+	pinMode(SEVEN_SEG_D, OUTPUT);
+	pinMode(SEVEN_SEG_E, OUTPUT);
+	pinMode(SEVEN_SEG_F, OUTPUT);
+	pinMode(SEVEN_SEG_G, OUTPUT);
+	pinMode(SEVEN_SEG_P, OUTPUT);
+
+	digitalWrite(SEVEN_SEG_A, HIGH);
+	digitalWrite(SEVEN_SEG_B, HIGH);
+	digitalWrite(SEVEN_SEG_C, HIGH);
+	digitalWrite(SEVEN_SEG_D, HIGH);
+	digitalWrite(SEVEN_SEG_E, HIGH);
+	digitalWrite(SEVEN_SEG_F, HIGH);
+	digitalWrite(SEVEN_SEG_G, HIGH);
+	digitalWrite(SEVEN_SEG_P, HIGH);
+
 	clear();
 	delay(10);
 	WriteLEDArray();
@@ -327,6 +355,136 @@ void setup() {
 	//global_interval = 0;
 	//time_last = 0;
 
+}
+
+void set_display(uint8_t val) {
+	digitalWrite(SEVEN_SEG_A, HIGH);
+	digitalWrite(SEVEN_SEG_B, HIGH);
+	digitalWrite(SEVEN_SEG_C, HIGH);
+	digitalWrite(SEVEN_SEG_D, HIGH);
+	digitalWrite(SEVEN_SEG_E, HIGH);
+	digitalWrite(SEVEN_SEG_F, HIGH);
+	digitalWrite(SEVEN_SEG_G, HIGH);
+	switch(val) {
+		case 0:
+			digitalWrite(SEVEN_SEG_A, LOW);
+			digitalWrite(SEVEN_SEG_B, LOW);
+			digitalWrite(SEVEN_SEG_C, LOW);
+			digitalWrite(SEVEN_SEG_D, LOW);
+			digitalWrite(SEVEN_SEG_E, LOW);
+			digitalWrite(SEVEN_SEG_F, LOW);
+			break;
+		case 1:
+			digitalWrite(SEVEN_SEG_B, LOW);
+			digitalWrite(SEVEN_SEG_C, LOW);
+			break;
+		case 2:
+			digitalWrite(SEVEN_SEG_A, LOW);
+			digitalWrite(SEVEN_SEG_B, LOW);
+			digitalWrite(SEVEN_SEG_D, LOW);
+			digitalWrite(SEVEN_SEG_E, LOW);
+			digitalWrite(SEVEN_SEG_G, LOW);
+			break;
+		case 3:
+			digitalWrite(SEVEN_SEG_A, LOW);
+			digitalWrite(SEVEN_SEG_B, LOW);
+			digitalWrite(SEVEN_SEG_C, LOW);
+			digitalWrite(SEVEN_SEG_D, LOW);
+			digitalWrite(SEVEN_SEG_G, LOW);
+			break;
+		case 4:
+			digitalWrite(SEVEN_SEG_B, LOW);
+			digitalWrite(SEVEN_SEG_C, LOW);
+			digitalWrite(SEVEN_SEG_F, LOW);
+			digitalWrite(SEVEN_SEG_G, LOW);
+			break;
+		case 5:
+			digitalWrite(SEVEN_SEG_A, LOW);
+			digitalWrite(SEVEN_SEG_C, LOW);
+			digitalWrite(SEVEN_SEG_D, LOW);
+			digitalWrite(SEVEN_SEG_F, LOW);
+			digitalWrite(SEVEN_SEG_G, LOW);
+			break;
+		case 6:
+			digitalWrite(SEVEN_SEG_A, LOW);
+			digitalWrite(SEVEN_SEG_C, LOW);
+			digitalWrite(SEVEN_SEG_D, LOW);
+			digitalWrite(SEVEN_SEG_E, LOW);
+			digitalWrite(SEVEN_SEG_F, LOW);
+			digitalWrite(SEVEN_SEG_G, LOW);
+			break;
+		case 7:
+			digitalWrite(SEVEN_SEG_A, LOW);
+			digitalWrite(SEVEN_SEG_B, LOW);
+			digitalWrite(SEVEN_SEG_C, LOW);
+			break;
+		case 8:
+			digitalWrite(SEVEN_SEG_A, LOW);
+			digitalWrite(SEVEN_SEG_B, LOW);
+			digitalWrite(SEVEN_SEG_C, LOW);
+			digitalWrite(SEVEN_SEG_D, LOW);
+			digitalWrite(SEVEN_SEG_E, LOW);
+			digitalWrite(SEVEN_SEG_F, LOW);
+			digitalWrite(SEVEN_SEG_G, LOW);
+			break;
+		case 9:
+			digitalWrite(SEVEN_SEG_A, LOW);
+			digitalWrite(SEVEN_SEG_B, LOW);
+			digitalWrite(SEVEN_SEG_C, LOW);
+			digitalWrite(SEVEN_SEG_D, LOW);
+			digitalWrite(SEVEN_SEG_F, LOW);
+			digitalWrite(SEVEN_SEG_G, LOW);
+			break;
+		case 10:
+			//a
+			digitalWrite(SEVEN_SEG_A, LOW);
+			digitalWrite(SEVEN_SEG_B, LOW);
+			digitalWrite(SEVEN_SEG_C, LOW);
+			digitalWrite(SEVEN_SEG_E, LOW);
+			digitalWrite(SEVEN_SEG_F, LOW);
+			digitalWrite(SEVEN_SEG_G, LOW);
+			break;
+		case 11:
+			//b
+			digitalWrite(SEVEN_SEG_C, LOW);
+			digitalWrite(SEVEN_SEG_D, LOW);
+			digitalWrite(SEVEN_SEG_E, LOW);
+			digitalWrite(SEVEN_SEG_F, LOW);
+			digitalWrite(SEVEN_SEG_G, LOW);
+			break;
+		case 12:
+			//c
+			digitalWrite(SEVEN_SEG_A, LOW);
+			digitalWrite(SEVEN_SEG_D, LOW);
+			digitalWrite(SEVEN_SEG_E, LOW);
+			digitalWrite(SEVEN_SEG_F, LOW);
+			break;
+		case 13:
+			//d
+			digitalWrite(SEVEN_SEG_B, LOW);
+			digitalWrite(SEVEN_SEG_C, LOW);
+			digitalWrite(SEVEN_SEG_D, LOW);
+			digitalWrite(SEVEN_SEG_E, LOW);
+			digitalWrite(SEVEN_SEG_G, LOW);
+			break;
+		case 14:
+			//e
+			digitalWrite(SEVEN_SEG_A, LOW);
+			digitalWrite(SEVEN_SEG_D, LOW);
+			digitalWrite(SEVEN_SEG_E, LOW);
+			digitalWrite(SEVEN_SEG_F, LOW);
+			digitalWrite(SEVEN_SEG_G, LOW);
+			break;
+		case 15:
+			//f
+			digitalWrite(SEVEN_SEG_A, LOW);
+			digitalWrite(SEVEN_SEG_E, LOW);
+			digitalWrite(SEVEN_SEG_F, LOW);
+			digitalWrite(SEVEN_SEG_G, LOW);
+			break;
+		default:
+			break;
+	};
 }
 
 //pass the guy and its last position
@@ -851,6 +1009,7 @@ void loop() {
 	unsigned long time = millis();
 	uint16_t analog_val = analogRead(ANALOG_TRIGGER_PIN);
 	bool trig = false;
+	static uint8_t butpush = 0;
 
 	//check for a trigger
 	if(digitalRead(PATTERN_SEL_PIN))
@@ -866,6 +1025,8 @@ void loop() {
 		//down
 	} else if(but_hist == 0x00){
 		if(!down){
+			butpush = (butpush + 1) % 16;
+			set_display(butpush);
 			//set_pattern((pattern_t)((led_pattern + 1) % PATTERN_T_END));
 			down = true;
 			////XXX temp! just using the button for trigger now
