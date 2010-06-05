@@ -32,7 +32,8 @@
 #define NUM_LEDS 24
 #define HALF_NUM_LEDS 12
 
-#define ANALOG_THRES 1000
+#define ANALOG_THRESH_POS 700
+#define ANALOG_THRESH_NEG 300
 #define TRIGGER_MIN_INTERVAL 200
 #define TRIG_DISPLAY_TIME 50
 
@@ -52,12 +53,12 @@ typedef enum {
 	SINGLE_GUY,
 	MULT_GUYS,
 	MODE_WIPE,
-	GATE,
-	VERT_MIRROR,
-	ECHO,
 	QUAD_ECHO,
+	VERT_MIRROR,
+	GATE,
+	ECHO,
+	ROTATION,
 	//FADE,
-	//ROTATION,
 	//WIPE,
 	PATTERN_T_END
 } pattern_t;
@@ -92,8 +93,7 @@ typedef struct _echo_pattern_data_t {
 volatile echo_pattern_data_t echo_pattern_data[ECHO_PAT_LEN];
 volatile uint8_t echo_pattern_index;
 
-/*
-#define ROTATION_GUY_COUNT 6
+#define ROTATION_GUY_COUNT 4
 #define ROTATION_ACCEL_TIME 80
 typedef struct _rotation_guy_t {
 	bool active;
@@ -109,8 +109,9 @@ typedef struct _rotation_pattern {
 	unsigned long last_time;
 } rotation_pattern_t;
 
-//rotation_pattern_t rotation_pattern_data;
+rotation_pattern_t rotation_pattern_data;
 
+/*
 typedef struct _wipe_pattern_data_t {
 	bool active;
 	bool wipe_forward;
@@ -285,6 +286,23 @@ void set_pattern(pattern_t new_pat){
 			}
 			echo_pattern_index = 0;
 			break;
+		case ROTATION:
+			rotation_pattern_data.index = 0;
+			rotation_pattern_data.last_time = 0;
+			for(uint8_t i = 0; i < ROTATION_GUY_COUNT; i++){
+				rotation_pattern_data.guys[i].active = false;
+				/*
+				rotation_pattern_data.guys[i].position = random(NUM_LEDS);
+				rotation_pattern_data.guys[i].position_mod = (float)random(24) / 127.0 + 0.001;
+				if(random(2)){
+					rotation_pattern_data.guys[i].position_mod = 
+						-rotation_pattern_data.guys[i].position_mod;
+				}
+				rotation_pattern_data.guys[i].hue = (float)random(256) / 256.0f;
+				rotation_pattern_data.guys[i].length = 1;
+				*/
+			}
+			break;
 		default:
 			break;
 	}
@@ -306,23 +324,6 @@ void set_pattern(pattern_t new_pat){
 				echo_pattern_data[i].level = 0.0f;
 			}
 			echo_pattern_index = 0;
-			break;
-		case ROTATION:
-			rotation_pattern_data.index = 0;
-			rotation_pattern_data.last_time = 0;
-			for(uint8_t i = 0; i < ROTATION_GUY_COUNT; i++){
-				rotation_pattern_data.guys[i].active = false;
-				/*
-				rotation_pattern_data.guys[i].position = random(NUM_LEDS);
-				rotation_pattern_data.guys[i].position_mod = (float)random(24) / 127.0 + 0.001;
-				if(random(2)){
-					rotation_pattern_data.guys[i].position_mod = 
-						-rotation_pattern_data.guys[i].position_mod;
-				}
-				rotation_pattern_data.guys[i].hue = (float)random(256) / 256.0f;
-				rotation_pattern_data.guys[i].length = 1;
-				*/
-			}
 			break;
 		case WIPE:
 			wipe_pattern_data.active = false;
@@ -620,6 +621,7 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 	uint16_t rgb[3];
 	long interval = 1;
 	unsigned long time_since_last = time - draw_time_last;
+	bool faster = false;
 
 	//we don't draw the first time around
 	if (draw_time_last == 0) {
@@ -1136,6 +1138,67 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 				}
 			}
 			break;
+		case ROTATION:
+			clear();
+			if(trig){
+				unsigned long interval = time - rotation_pattern_data.last_time;
+				if(rotation_pattern_data.last_time != 0 &&
+						interval > 100 &&
+						random(10) > 6){
+					rotation_guy_t * guy = &rotation_pattern_data.guys[rotation_pattern_data.index];
+					//increment for next time
+					rotation_pattern_data.index = (rotation_pattern_data.index + 1) % ROTATION_GUY_COUNT;
+					guy->active = true;
+					if(random(255) > 170)
+						guy->length = random(3) + 1;
+					else
+						guy->length = 1;
+					guy->position = random(NUM_LEDS);
+					guy->position_mod = (float)NUM_LEDS / (float)(interval);
+					guy->hue = (float)random(256) / 256.0f;
+				}
+				//very seldomly, change direction
+				if(random(255) > 230){
+					for(uint8_t i = 0; i < ROTATION_GUY_COUNT; i++){
+						rotation_pattern_data.guys[i].position_mod = 
+							-rotation_pattern_data.guys[i].position_mod;
+					}
+				}
+				rotation_pattern_data.last_time = time;
+				faster = true;
+			} else if(rotation_pattern_data.last_time + ROTATION_ACCEL_TIME > time){
+				faster = true;
+			}
+			for(uint8_t i = 0; i < ROTATION_GUY_COUNT; i++){
+				rotation_guy_t * guy = &rotation_pattern_data.guys[i];
+				if(guy->active){
+					/*
+					//on a trig, reverse
+					if(trig)
+					guy->position_mod = -guy->position_mod;
+					 */
+					if(faster)
+						guy->position += (4 * guy->position_mod);
+					else
+						guy->position += guy->position_mod;
+					//keep in range
+					while(guy->position >= NUM_LEDS)
+						guy->position -= NUM_LEDS;
+					while(guy->position < 0.0f)
+						guy->position += NUM_LEDS;
+					hsv[0] = guy->hue;
+					hsv[1] = 1.0;
+					hsv[2] = 1.0;
+					hsv2rgb(hsv, rgb);
+					//just for now, draw over whatever is there
+					for(uint8_t j = 0; j < guy->length; j++){
+						uint8_t idx = (uint8_t)(j + guy->position) % NUM_LEDS;
+						for(uint8_t k = 0; k < 3; k++)
+							LEDChannels[idx][k] = rgb[k];
+					}
+				}
+			}
+			break;
 		case NONE:
 		default:
 			clear();
@@ -1181,67 +1244,6 @@ void draw(pattern_t pattern, unsigned long time, bool trig){
 			for(uint8_t i = 0; i < NUM_LEDS; i++){
 				for(uint8_t j = 0; j < 3; j++)
 					LEDChannels[i][j] = rgb[j];
-			}
-			break;
-		case ROTATION:
-			clear();
-			if(trig){
-				unsigned long interval = time - rotation_pattern_data.last_time;
-				if(rotation_pattern_data.last_time != 0 &&
-						interval > 100 &&
-						random(10) > 6){
-					guy = &rotation_pattern_data.guys[rotation_pattern_data.index];
-					//increment for next time
-					rotation_pattern_data.index = (rotation_pattern_data.index + 1) % ROTATION_GUY_COUNT;
-					guy->active = true;
-					if(random(255) > 170)
-						guy->length = random(3) + 1;
-					else
-						guy->length = 1;
-					guy->position = random(NUM_LEDS);
-					guy->position_mod = (float)NUM_LEDS / (float)(interval);
-					guy->hue = (float)random(256) / 256.0f;
-				}
-				//very seldomly, change direction
-				if(random(255) > 230){
-					for(uint8_t i = 0; i < ROTATION_GUY_COUNT; i++){
-						rotation_pattern_data.guys[i].position_mod = 
-							-rotation_pattern_data.guys[i].position_mod;
-					}
-				}
-				rotation_pattern_data.last_time = time;
-				faster = true;
-			} else if(rotation_pattern_data.last_time + ROTATION_ACCEL_TIME > time){
-				faster = true;
-			}
-			for(uint8_t i = 0; i < ROTATION_GUY_COUNT; i++){
-				guy = &rotation_pattern_data.guys[i];
-				if(guy->active){
-					/*
-					//on a trig, reverse
-					if(trig)
-					guy->position_mod = -guy->position_mod;
-					 */
-					if(faster)
-						guy->position += (4 * guy->position_mod);
-					else
-						guy->position += guy->position_mod;
-					//keep in range
-					while(guy->position >= NUM_LEDS)
-						guy->position -= NUM_LEDS;
-					while(guy->position < 0.0f)
-						guy->position += NUM_LEDS;
-					hsv[0] = guy->hue;
-					hsv[1] = 1.0;
-					hsv[2] = 1.0;
-					hsv2rgb(hsv, rgb);
-					//just for now, draw over whatever is there
-					for(uint8_t j = 0; j < guy->length; j++){
-						uint8_t idx = (uint8_t)(j + guy->position) % NUM_LEDS;
-						for(uint8_t k = 0; k < 3; k++)
-							LEDChannels[idx][k] = rgb[k];
-					}
-				}
 			}
 			break;
 		case WIPE:
@@ -1358,7 +1360,7 @@ void loop() {
 
 	//if we're above the threshold and the time is greater than
 	//the time threshold
-	if(analog_val >= ANALOG_THRES && time >= trigger_next ){
+	if((analog_val >= ANALOG_THRESH_POS || analog_val <= ANALOG_THRESH_NEG) && time >= trigger_next ){
 		Serial.println(analog_val);
 		trig = true;
 		//set the minimum time for the next trigger
